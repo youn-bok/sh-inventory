@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>(주)에스에이치 비품관리</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#22221F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="비품관리">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
@@ -370,7 +378,11 @@ async function loadAll() {
   const scanIds = Object.keys(scanners).map(k => parseInt(k.replace('sc',''))).filter(n => !isNaN(n));
   if (scanIds.length) nextScannerId = Math.max(...scanIds) + 1;
 }
+const HAS_STORAGE = (typeof window.storage !== 'undefined' && window.storage !== null);
+const DEFAULT_GSHEET_URL = 'https://docs.google.com/spreadsheets/d/1JhR9f6U3WYVBjS6V5iukx1BA5FrN6nfpkvQrbd17yHQ/edit?usp=sharing';
+
 async function safeGet(key, fallback) {
+  if (!HAS_STORAGE) return fallback;
   try {
     const res = await window.storage.get(key, true);
     if (res && res.value !== undefined) return JSON.parse(res.value);
@@ -378,6 +390,7 @@ async function safeGet(key, fallback) {
   } catch (e) { return fallback; }
 }
 async function safeSet(key, value, _retried) {
+  if (!HAS_STORAGE) return false;
   try {
     await window.storage.set(key, JSON.stringify(value), true);
     return true;
@@ -592,7 +605,7 @@ function renderDashboard() {
   });
 }
 
-/* ===================== PM3 보유 현황 (센터·보관장소별 보유/사용/미사용) ===================== */
+/* ===================== PM3 보유 현황 (센터별 · 사용자별) ===================== */
 function renderScannerList() {
   const listEl = document.getElementById('scannerList');
   if (!listEl) return;
@@ -604,14 +617,16 @@ function renderScannerList() {
   const centers = getSortedCenters(entries);
   const totalsByCenter = {};
   centers.forEach(c => {
-    totalsByCenter[c] = entries.filter(s => s.center === c).reduce((acc, s) => {
-      acc.have += s.have || 0; acc.inUse += s.inUse || 0; acc.unused += s.unused || 0;
-      return acc;
-    }, { have: 0, inUse: 0, unused: 0 });
+    const rows = entries.filter(s => s.center === c);
+    totalsByCenter[c] = {
+      have: rows.length,
+      inUse: rows.filter(s => s.inUse).length,
+      unused: rows.filter(s => !s.inUse).length,
+    };
   });
 
   listEl.innerHTML = `<div class="pm3-columns">${centers.map(c => {
-    const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c).sort((a,b) => a[1].zone.localeCompare(b[1].zone, 'ko'));
+    const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c).sort((a,b) => a[1].user.localeCompare(b[1].user, 'ko'));
     const t = totalsByCenter[c];
     return `
     <div class="pm3-col">
@@ -619,8 +634,8 @@ function renderScannerList() {
       <div class="pm3-col-total">보유 ${t.have} · 사용 ${t.inUse} · 미사용 ${t.unused}</div>
       ${rows.map(([sid, s]) => `
         <div class="pm3-col-row" ${state.editUnlocked ? `data-scan-edit="${sid}"` : ''}>
-          <div class="pm3-zone">${escapeHtml(s.zone)}</div>
-          <div class="pm3-nums">보유${s.have||0}·사용${s.inUse||0}·미사용${s.unused||0}</div>
+          <div class="pm3-zone">${escapeHtml(s.user)}</div>
+          <div class="pm3-nums">${s.inUse ? '사용' : '미사용'}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
         </div>
       `).join('')}
     </div>`;
@@ -635,20 +650,29 @@ function renderScannerList() {
 
 function openScannerEdit(sid) {
   const isNew = !sid;
-  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', zone: '', have: 0, inUse: 0, unused: 0 } : scanners[sid];
+  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', user: '', inUse: true, serial: '', model: '', note: '' } : scanners[sid];
   sheetPanel.innerHTML = `
     <div class="sheet-handle"></div>
-    <div class="sheet-top"><div class="sheet-title">${isNew ? '보관장소 추가' : 'PM3 보유 정보 수정'}</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
+    <div class="sheet-top"><div class="sheet-title">${isNew ? 'PM3 보유자 추가' : 'PM3 보유 정보 수정'}</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
     <div class="form-row2">
       <div class="form-field"><label class="form-label">센터</label>
         <input class="form-input" id="scanCenterInput" value="${escapeAttr(rec.center)}" list="centerOptionsList2">
         <datalist id="centerOptionsList2">${getSortedCenters(getEffectiveData()).map(c => `<option value="${escapeAttr(c)}">`).join('')}</datalist>
       </div>
-      <div class="form-field"><label class="form-label">구역/보관장소</label><input class="form-input" id="scanZoneInput" value="${escapeAttr(rec.zone)}"></div>
+      <div class="form-field"><label class="form-label">사용자</label><input class="form-input" id="scanUserInput" value="${escapeAttr(rec.user)}"></div>
     </div>
-    <div class="form-field"><label class="form-label">보유 수량</label><input type="number" class="form-input" id="scanHaveInput" value="${rec.have||0}" min="0"></div>
-    <div class="form-field"><label class="form-label">사용 수량</label><input type="number" class="form-input" id="scanInUseInput" value="${rec.inUse||0}" min="0"></div>
-    <div class="form-field"><label class="form-label">미사용 수량</label><input type="number" class="form-input" id="scanUnusedInput" value="${rec.unused||0}" min="0"></div>
+    <div class="form-field">
+      <label class="form-label">사용여부</label>
+      <select class="form-select" id="scanInUseInput">
+        <option value="1" ${rec.inUse ? 'selected' : ''}>사용</option>
+        <option value="0" ${!rec.inUse ? 'selected' : ''}>미사용</option>
+      </select>
+    </div>
+    <div class="form-row2">
+      <div class="form-field"><label class="form-label">모델명</label><input class="form-input" id="scanModelInput" value="${escapeAttr(rec.model)}"></div>
+      <div class="form-field"><label class="form-label">시리얼번호</label><input class="form-input" id="scanSerialInput" value="${escapeAttr(rec.serial)}"></div>
+    </div>
+    <div class="form-field"><label class="form-label">특이사항</label><textarea class="form-textarea" id="scanNoteInput">${escapeHtml(rec.note)}</textarea></div>
     <div class="sheet-actions">
       ${!isNew ? `<button class="sheet-btn secondary" id="scanDeleteBtn">삭제</button>` : `<button class="sheet-btn secondary" id="scanCancelBtn">취소</button>`}
       <button class="sheet-btn primary" id="scanSaveBtn">저장</button>
@@ -659,31 +683,32 @@ function openScannerEdit(sid) {
   if (cancelBtn) cancelBtn.onclick = closeDetailScanner;
   const delBtn = document.getElementById('scanDeleteBtn');
   if (delBtn) delBtn.onclick = async () => {
-    if (!(await customConfirm(`${rec.center} ${rec.zone} 기록을 삭제할까요?`))) return;
+    if (!(await customConfirm(`${rec.center} ${rec.user} 님의 기록을 삭제할까요?`))) return;
     delete scanners[sid];
     const ok = await safeSet('scanners', scanners);
     if (!ok) { scanners[sid] = rec; await customAlert('저장소 오류로 삭제에 실패했습니다. 다시 시도해주세요.'); return; }
-    pushLog(`PM3 기록 삭제: ${rec.center} ${rec.zone}`);
+    pushLog(`PM3 기록 삭제: ${rec.center} ${rec.user}`);
     showToast('삭제되었습니다');
     closeDetailScanner();
   };
   document.getElementById('scanSaveBtn').onclick = async () => {
     const center = document.getElementById('scanCenterInput').value.trim();
-    const zone = document.getElementById('scanZoneInput').value.trim();
-    if (!center || !zone) { await customAlert('센터와 구역/보관장소를 입력해주세요.'); return; }
-    const have = parseInt(document.getElementById('scanHaveInput').value) || 0;
-    const inUse = parseInt(document.getElementById('scanInUseInput').value) || 0;
-    const unused = parseInt(document.getElementById('scanUnusedInput').value) || 0;
+    const user = document.getElementById('scanUserInput').value.trim();
+    if (!center || !user) { await customAlert('센터와 사용자를 입력해주세요.'); return; }
+    const inUse = document.getElementById('scanInUseInput').value === '1';
+    const model = document.getElementById('scanModelInput').value.trim();
+    const serial = document.getElementById('scanSerialInput').value.trim();
+    const note = document.getElementById('scanNoteInput').value.trim();
     const id = isNew ? 'sc' + (nextScannerId++) : sid;
     const prevVal = scanners[id];
-    scanners[id] = { center, zone, have, inUse, unused, updatedAt: new Date().toISOString() };
+    scanners[id] = { center, user, inUse, model, serial, note, updatedAt: new Date().toISOString() };
     const ok = await safeSet('scanners', scanners);
     if (!ok) {
       if (prevVal) scanners[id] = prevVal; else delete scanners[id];
       await customAlert('저장소 오류로 저장에 실패했습니다. 다시 시도해주세요.');
       return;
     }
-    pushLog(`${isNew ? 'PM3 등록' : 'PM3 정보 수정'}: ${center} ${zone} — 보유${have}·사용${inUse}·미사용${unused}`);
+    pushLog(`${isNew ? 'PM3 등록' : 'PM3 정보 수정'}: ${center} ${user} — ${inUse ? '사용' : '미사용'}`);
     showToast('저장되었습니다');
     closeDetailScanner();
   };
@@ -1325,8 +1350,14 @@ document.getElementById('excelUploadInput').addEventListener('change', async (e)
 /* ===================== Google Sheet full sync (3 tabs, monthly bulk update) ===================== */
 const GSHEET_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '분류':'category', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
 const MACHINE_EXTRA_FIELD_MAP = { '연락처':'contact', '월렌탈료':'rentalFee', '운용 시작':'rentalStart', '렌탈 종료':'rentalEnd', '종료 조건':'terminationCondition' };
-const GSHEET_TABS = { biz: '비품전체내역_웹용백데이터', machine: '기계전체내역_웹용백데이터', pm3: 'PM3현황_웹용백데이터' };
-const PM3_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '보유':'have', '사용':'inUse', '미사용':'unused' };
+const GSHEET_TABS = { biz: '비품전체내역_웹용백데이터_삭제금지', machine: '기계전체내역_웹용백데이터_삭제금지', pm3: 'PM3현황_웹용백데이터_삭제금지' };
+const PM3_FIELD_MAP = { '센터':'center', '사용자':'user', '사용여부':'inUseRaw', '시리얼번호':'serial', '특이사항':'note', '모델명':'model' };
+function parsePm3InUse(val) {
+  const s = String(val || '').trim();
+  if (s.includes('미사용')) return false;
+  if (s.includes('사용')) return true;
+  return false;
+}
 
 function renderGsheetCard() {
   const card = document.getElementById('gsheetCard');
@@ -1338,10 +1369,10 @@ function renderGsheetCard() {
         <input class="gsheet-input" id="gsheetUrlInput" placeholder="구글시트 링크(주소창 URL)를 붙여넣으세요">
         <button class="gsheet-btn" id="gsheetSaveBtn">연결</button>
       </div>
-      <div class="gsheet-hint">구글시트 1개에 <b>비품전체내역_웹용백데이터 / 기계전체내역_웹용백데이터 / PM3현황_웹용백데이터</b> 탭 3개를 만드세요.<br><br>
+      <div class="gsheet-hint">구글시트 안에 <b>비품전체내역_웹용백데이터_삭제금지 / 기계전체내역_웹용백데이터_삭제금지 / PM3현황_웹용백데이터_삭제금지</b> 탭 3개가 있어야 해요.<br><br>
       "웹에 게시"는 <b>필요 없고</b>, 대신 오른쪽 상단 [공유] 버튼에서 <b>"링크가 있는 모든 사용자"를 "뷰어"로</b> 설정한 다음, 브라우저 주소창에 있는 구글시트 링크(예: docs.google.com/spreadsheets/d/…)를 그대로 붙여넣어 주세요.<br><br>
       비품·기계 탭 헤더: 센터 / 구역/보관장소 / 분류 / 소분류 / 품목 / 모델명 / 상태 / 수량 / 비고 (기계 탭은 연락처 / 월렌탈료 / 운용 시작 / 렌탈 종료 / 종료 조건도 인식됩니다)<br>
-      PM3현황 탭 헤더: 센터 / 구역/보관장소 / 보유 / 사용 / 미사용<br><br>
+      PM3현황 탭 헤더: 센터 / 사용자 / 사용여부 / 시리얼번호 / 특이사항 / 모델명<br><br>
       ⚠️ 동기화하면 <b>시트에 있는 내용으로 전체 데이터가 교체</b>됩니다 — 시트에 없는 기존 품목·인원은 삭제 처리돼요. 시트에 현재 전체 목록을 다 채워두고 동기화하세요.</div>
     `;
     document.getElementById('gsheetSaveBtn').onclick = async () => {
@@ -1460,7 +1491,7 @@ async function syncGoogleSheet(silent) {
       }
     }
 
-    // --- PM3현황 → 보관장소별 보유/사용/미사용 집계 ---
+    // --- PM3현황 → 사용자별 보유 현황 ---
     const pm3Rows = await fetchTabCsv(sheetId, GSHEET_TABS.pm3);
     const seenPm3Keys = new Set();
     if (pm3Rows === null) {
@@ -1470,17 +1501,21 @@ async function syncGoogleSheet(silent) {
         const rec = {};
         Object.keys(PM3_FIELD_MAP).forEach(kr => { rec[PM3_FIELD_MAP[kr]] = row[kr]; });
         const center = String(rec.center || '').trim();
-        const zone = String(rec.zone || '').trim();
-        if (!center) return;
-        const have = parseInt(rec.have) || 0;
-        const inUse = parseInt(rec.inUse) || 0;
-        const unused = parseInt(rec.unused) || 0;
+        const user = String(rec.user || '').trim();
+        if (!center || !user) return;
+        const inUse = parsePm3InUse(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
         let id = gsheetSyncMap.pm3[externalKey];
         if (id === undefined) { id = 'sc' + (nextScannerId++); gsheetSyncMap.pm3[externalKey] = id; scanAdded++; }
         else { scanUpdated++; }
-        scanners[id] = { center, zone: zone || '전체', have, inUse, unused, updatedAt: new Date().toISOString() };
+        scanners[id] = {
+          center, user, inUse,
+          serial: String(rec.serial || '').trim(),
+          model: String(rec.model || '').trim(),
+          note: String(rec.note || '').trim(),
+          updatedAt: new Date().toISOString(),
+        };
       });
       Object.keys(gsheetSyncMap.pm3).forEach(key => {
         if (!seenPm3Keys.has(key)) {
@@ -1528,9 +1563,16 @@ document.getElementById('xlImportBtn').onclick = () => document.getElementById('
   renderLockBtn();
   await loadAll();
   renderView();
-  // Note: full-replace sync (deletes items missing from the sheet) is not run
-  // automatically on load — only via the "지금 동기화" button, to avoid wiping
-  // data if the sheet happens to be mid-edit when someone opens the app.
+  if (!HAS_STORAGE) {
+    // No persistent storage here (e.g. hosted outside claude.ai) — nothing survives
+    // a reload anyway, so it's safe (and necessary) to auto-sync from the sheet
+    // every time the page loads, for every visitor, so everyone sees live data.
+    if (!settings.gsheetUrl) settings.gsheetUrl = DEFAULT_GSHEET_URL;
+    await syncGoogleSheet(true);
+  }
+  // When storage IS available (claude.ai), full-replace sync only runs via the
+  // "지금 동기화" button, to avoid wiping accumulated edits if the sheet happens
+  // to be mid-edit when someone opens the app.
 })();
 
 </script>
