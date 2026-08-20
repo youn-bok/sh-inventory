@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>(주)에스에이치 비품관리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #22221F;
+    --ink-dim: #6B6A63;
+    --line: #E4E2DA;
+    --accent-1: #2F5233;
+    --accent-2: #2B4C7E;
+    --ok: #3E7C4A; --ok-bg: #E7F1E6;
+    --bad: #B5622C; --bad-bg: #FBEADD;
+    --waste: #A63A34; --waste-bg: #FBE4E2;
+    --check: #6B5B95; --check-bg: #EEEAF6;
+    --radius: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh; padding-bottom: 60px; }
+  header { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 16px 16px 0; border-bottom: 1px solid var(--line); }
+  .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; font-weight: 800; }
+  .lock-btn { display: flex; align-items: center; gap: 5px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: var(--ink-dim); cursor: pointer; }
+  .lock-btn.unlocked { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
+  .lock-btn svg { width: 13px; height: 13px; }
+  .view-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+  .view-tab { flex: 1; text-align: center; padding: 10px 4px; font-size: 13.5px; font-weight: 700; color: var(--ink-dim); border-bottom: 2.5px solid transparent; cursor: pointer; }
+  .view-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+  .toolbar { padding: 12px 16px 10px; }
+  .center-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .center-tab { flex: 1; padding: 9px 8px; border-radius: var(--radius); border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: 13.5px; text-align: center; cursor: pointer; color: var(--ink-dim); transition: all .15s ease; }
+  .center-tab.active[data-c="1센터"] { background: var(--accent-1); border-color: var(--accent-1); color: #fff; }
+  .center-tab.active[data-c="2센터"] { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+  .center-tab.active[data-c="전체"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .center-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; color: #fff; flex-shrink: 0; }
+  .center-badge.c1 { background: var(--accent-1); } .center-badge.c2 { background: var(--accent-2); } .center-badge.c3 { background: var(--ink-dim); }
+
+  .search-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .search-box { flex: 1; position: relative; }
+  .search-box input { width: 100%; padding: 10px 12px 10px 34px; border-radius: var(--radius); border: 1.5px solid var(--line); background: var(--surface); font-size: 14px; color: var(--ink); outline: none; }
+  .search-box input:focus { border-color: var(--ink-dim); }
+  .search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; stroke: var(--ink-dim); }
+  .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--ink-dim); font-size: 16px; cursor: pointer; display: none; padding: 4px; }
+  .audit-toggle-btn { flex-shrink: 0; padding: 0 14px; border-radius: var(--radius); border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; font-size: 12.5px; color: var(--ink-dim); cursor: pointer; }
+  .audit-toggle-btn.active { background: var(--check-bg); border-color: var(--check); color: var(--check); }
+
+  .status-filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .status-chip { flex-shrink: 0; padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-dim); cursor: pointer; white-space: nowrap; }
+  .status-chip.active[data-s="정상"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+  .status-chip.active[data-s="불량"] { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+  .status-chip.active[data-s="폐기"] { background: var(--waste-bg); border-color: var(--waste); color: var(--waste); }
+  .status-chip.active[data-s="확인필요"] { background: var(--check-bg); border-color: var(--check); color: var(--check); }
+  .status-chip.active[data-s="all"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+  .summary-bar { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 16px 4px; font-size: 12.5px; color: var(--ink-dim); }
+  .summary-bar b { color: var(--ink); font-size: 13.5px; }
+
+  main { padding: 4px 16px 20px; }
+  .zone-group { margin-top: 14px; }
+  .zone-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; cursor: pointer; user-select: none; }
+  .zone-title { font-size: 14.5px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+  .zone-pin { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-dim); flex-shrink: 0; }
+  .zone-meta { font-size: 12px; color: var(--ink-dim); display: flex; align-items: center; gap: 6px; }
+  .chevron { width: 14px; height: 14px; stroke: var(--ink-dim); transition: transform .15s ease; }
+  .zone-group.collapsed .chevron { transform: rotate(-90deg); }
+  .zone-group.collapsed .item-list { display: none; }
+
+  .item-list { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; }
+  .item-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item-row:last-child { border-bottom: none; }
+  .item-row:active { background: var(--bg); }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 13.5px; font-weight: 600; line-height: 1.35; word-break: keep-all; }
+  .item-model { font-size: 11.5px; color: var(--ink-dim); margin-top: 1px; }
+  .item-note-flag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700; color: var(--check); margin-top: 3px; }
+  .item-note-flag svg { width: 11px; height: 11px; stroke: var(--check); flex-shrink: 0; }
+  .audited-flag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700; color: var(--ok); margin-top: 3px; margin-left: 8px; }
+  .request-flag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700; color: var(--bad); margin-top: 3px; margin-left: 8px; }
+  .request-flag svg { width: 11px; height: 11px; stroke: var(--bad); flex-shrink: 0; }
+  .item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .qty { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .status-badge { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+  .status-badge.정상 { background: var(--ok-bg); color: var(--ok); }
+  .status-badge.불량 { background: var(--bad-bg); color: var(--bad); }
+  .status-badge.폐기 { background: var(--waste-bg); color: var(--waste); }
+  .status-badge.확인필요 { background: var(--check-bg); color: var(--check); }
+  .quick-check-btn { border: 1.5px solid var(--ok); background: var(--ok-bg); color: var(--ok); border-radius: 999px; width: 30px; height: 30px; font-size: 15px; font-weight: 800; cursor: pointer; flex-shrink: 0; display:flex; align-items:center; justify-content:center; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--ink-dim); font-size: 13.5px; }
+
+  /* ---- Dashboard ---- */
+  .dash { padding: 14px 16px 10px; }
+  .dash-hero { background: var(--ink); color: #fff; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+  .dash-hero-label { font-size: 12px; opacity: .65; font-weight: 600; margin-bottom: 6px; }
+  .dash-hero-row { display: flex; justify-content: space-between; align-items: flex-end; }
+  .dash-hero-stat .num { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+  .dash-hero-stat .lbl { font-size: 11.5px; opacity: .7; margin-top: 2px; }
+  .dash-grid { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-bottom: 14px; overflow-x: auto; }
+  .dash-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+  .dash-card.clickable, .bar-row.clickable { cursor: pointer; }
+  .dash-card.clickable:active, .bar-row.clickable:active { background: var(--bg); }
+  .dash-card-label { font-size: 11px; font-weight: 700; color: var(--ink-dim); margin-bottom: 6px; }
+  .dash-card-value { font-size: 20px; font-weight: 800; }
+  .dash-card-sub { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .section-title { font-size: 13.5px; font-weight: 800; margin: 18px 2px 8px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
+  .bar-label { width: 62px; flex-shrink: 0; font-weight: 700; color: var(--ink-dim); }
+  .bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; }
+  .bar-val { width: 54px; text-align: right; flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .progress-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .progress-top .t { font-size: 13.5px; font-weight: 800; }
+  .progress-top .v { font-size: 12.5px; color: var(--ink-dim); }
+  .progress-track { height: 10px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--check); border-radius: 999px; transition: width .3s ease; }
+  .mismatch-banner { display: flex; align-items: center; gap: 8px; background: var(--bad-bg); color: var(--bad); border-radius: var(--radius); padding: 10px 12px; font-size: 12.5px; font-weight: 700; margin-top: 10px; cursor: pointer; }
+  .mismatch-banner svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .section-title-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 2px 8px; }
+  .section-title-row .section-title { margin: 0; }
+  .mini-add-btn { border: none; background: var(--ink); color: #fff; font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+  .scanner-list { background: transparent; }
+  .pm3-columns { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .pm3-col { flex: 0 0 148px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .pm3-col-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+  .pm3-col-total { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .pm3-col-row { padding: 6px 0; border-bottom: 1px solid var(--line); cursor: default; }
+  .pm3-col-row:last-child { border-bottom: none; }
+  .pm3-col-row[data-scan-edit] { cursor: pointer; }
+  .pm3-col-row[data-scan-edit]:active { opacity: .6; }
+  .pm3-zone { font-size: 12px; font-weight: 700; margin-bottom: 2px; word-break: keep-all; }
+  .pm3-nums { font-size: 10.5px; color: var(--ink-dim); }
+
+  .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .qa-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 8px; font-size: 12.5px; font-weight: 700; color: var(--ink); cursor: pointer; text-align: center; }
+  .qa-btn svg { width: 20px; height: 20px; stroke: var(--ink-dim); }
+
+  .excel-mini-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .excel-mini-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 8px; font-size: 12.5px; font-weight: 700; color: var(--ink); cursor: pointer; }
+  .excel-mini-btn svg { width: 16px; height: 16px; stroke: var(--ink-dim); flex-shrink: 0; }
+  .excel-mini-btn:active { background: var(--bg); }
+
+  .gsheet-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+  .gsheet-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .gsheet-title { font-size: 12.5px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+  .gsheet-title svg { width: 14px; height: 14px; stroke: var(--check); flex-shrink: 0; }
+  .gsheet-status { font-size: 11px; color: var(--ink-dim); }
+  .gsheet-row { display: flex; gap: 6px; }
+  .gsheet-input { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--line); font-size: 12.5px; background: var(--bg); color: var(--ink); outline: none; }
+  .gsheet-input:focus { border-color: var(--ink-dim); }
+  .gsheet-btn { flex-shrink: 0; padding: 8px 12px; border-radius: 8px; border: none; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .gsheet-btn.secondary { background: var(--check-bg); color: var(--check); }
+  .gsheet-hint { font-size: 10.5px; color: var(--ink-dim); margin-top: 6px; line-height: 1.5; }
+  .gsheet-synced-row { display: flex; align-items: center; justify-content: space-between; }
+
+  .dash-hero-stat.clickable { cursor: pointer; }
+  .dash-hero-stat.clickable:active { opacity: .7; }
+
+  .activity-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .activity-row { padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .activity-row:last-child { border-bottom: none; }
+  .activity-row .t1 { font-weight: 600; }
+  .activity-row .t2 { color: var(--ink-dim); font-size: 11px; margin-top: 2px; }
+  .empty-activity { padding: 20px; text-align: center; color: var(--ink-dim); font-size: 12.5px; }
+
+  /* ---- Sheet / modal ---- */
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(20,20,18,0.42); z-index: 50; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+  .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+  .sheet { width: 100%; max-width: 480px; background: var(--surface); border-radius: 18px 18px 0 0; padding: 10px 20px 26px; transform: translateY(16px); transition: transform .18s ease; max-height: 86vh; overflow-y: auto; }
+  .sheet-overlay.open .sheet { transform: translateY(0); }
+  .sheet-handle { width: 36px; height: 4px; background: var(--line); border-radius: 999px; margin: 6px auto 14px; }
+  .sheet-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+  .sheet-title { font-size: 17px; font-weight: 800; line-height: 1.35; }
+  .sheet-close { border: none; background: var(--bg); color: var(--ink-dim); width: 26px; height: 26px; border-radius: 50%; font-size: 14px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .sheet-model { font-size: 13px; color: var(--ink-dim); margin-bottom: 14px; }
+  .sheet-badges { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .sheet-loc-badge { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: var(--bg); color: var(--ink); }
+  .sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .sheet-stat { background: var(--bg); border-radius: var(--radius); padding: 10px 12px; }
+  .sheet-stat-label { font-size: 10.5px; color: var(--ink-dim); font-weight: 700; margin-bottom: 3px; }
+  .sheet-stat-value { font-size: 15px; font-weight: 800; }
+  .sheet-note-box { background: var(--check-bg); border: 1px solid #DCD4EE; border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+  .sheet-note-label { font-size: 11px; font-weight: 800; color: var(--check); display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+  .sheet-note-text { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+  .sheet-audit-box { background: var(--ok-bg); border: 1px solid #CFE3CD; border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+  .sheet-audit-box.mismatch { background: var(--bad-bg); border-color: #F0CBAE; }
+  .sheet-audit-label { font-size: 11px; font-weight: 800; color: var(--ok); display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+  .sheet-audit-box.mismatch .sheet-audit-label { color: var(--bad); }
+  .sheet-audit-text { font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+  .sheet-source { margin: 10px 0 16px; font-size: 11px; color: var(--ink-dim); }
+  .sheet-actions { display: flex; gap: 8px; }
+  .sheet-btn { flex: 1; padding: 11px; border-radius: var(--radius); font-size: 13.5px; font-weight: 700; border: none; cursor: pointer; text-align: center; }
+  .sheet-btn.primary { background: var(--ink); color: #fff; }
+  .sheet-btn.secondary { background: var(--bg); color: var(--ink); }
+  .sheet-btn.audit { background: var(--check-bg); color: var(--check); }
+
+  .form-field { margin-bottom: 12px; }
+  .form-label { font-size: 11.5px; font-weight: 700; color: var(--ink-dim); margin-bottom: 5px; display: block; }
+  .form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--line); font-size: 14px; background: var(--surface); color: var(--ink); outline: none; font-family: inherit; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--ink-dim); }
+  .form-textarea { resize: vertical; min-height: 60px; }
+  .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; z-index: 100; opacity: 0; pointer-events: none; transition: all .2s ease; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(20,20,18,0.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .modal-box { background: var(--surface); border-radius: 16px; padding: 20px; width: 100%; max-width: 340px; transform: scale(.96); transition: transform .15s ease; }
+  .modal-overlay.open .modal-box { transform: scale(1); }
+  .modal-msg { font-size: 14px; font-weight: 600; line-height: 1.5; margin-bottom: 14px; white-space: pre-line; }
+  .modal-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid var(--line); font-size: 15px; background: var(--bg); color: var(--ink); outline: none; margin-bottom: 14px; letter-spacing: 0.02em; }
+  .modal-input:focus { border-color: var(--ink-dim); }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .modal-btn.primary { background: var(--ink); color: #fff; }
+  .modal-btn.secondary { background: var(--bg); color: var(--ink); }
+
+  .file-input-hidden { display: none; }
+
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--line); display: flex; z-index: 15; padding-bottom: env(safe-area-inset-bottom); }
+  .bn-btn { flex: 1; padding: 10px 4px 8px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 700; color: var(--ink-dim); cursor: pointer; border: none; background: none; }
+  .bn-btn.active { color: var(--ink); }
+  .bn-btn svg { width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top-row">
+    <h1>(주)에스에이치 비품관리</h1>
+    <button class="lock-btn" id="lockBtn"></button>
+  </div>
+  <div class="view-tabs" id="viewTabs">
+    <div class="view-tab" data-v="dashboard">대시보드</div>
+    <div class="view-tab" data-v="list">재고 목록</div>
+    <div class="view-tab" data-v="machine">기계목록</div>
+    <div class="view-tab" data-v="audit">관리자</div>
+  </div>
+</header>
+
+<div id="dashboardView"></div>
+
+<div id="listView" style="display:none;">
+  <div class="toolbar">
+    <div class="center-tabs" id="centerTabs"></div>
+    <div class="search-row">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="품목, 모델명, 구역 검색">
+        <button class="clear-btn" id="clearBtn">✕</button>
+      </div>
+    </div>
+    <div class="status-filters" id="statusFilters"></div>
+  </div>
+  <div class="summary-bar" id="summaryBar"></div>
+  <main id="mainContent"></main>
+</div>
+
+<div id="machineView" style="display:none;">
+  <div class="toolbar">
+    <div class="center-tabs" id="machineCenterTabs"></div>
+    <div class="search-row">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="machineSearchInput" placeholder="기계명, 모델명, 구역 검색">
+        <button class="clear-btn" id="machineClearBtn">✕</button>
+      </div>
+    </div>
+    <div class="status-filters" id="machineStatusFilters"></div>
+  </div>
+  <div class="summary-bar" id="machineSummaryBar"></div>
+  <main id="machineMainContent"></main>
+</div>
+
+<div id="auditView" style="display:none;">
+  <div class="dash" style="padding-bottom:0;">
+    <div class="section-title" style="margin-top:0;">엑셀</div>
+    <div class="excel-mini-row">
+      <div class="excel-mini-btn" id="xlExportBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>엑셀 내보내기</span>
+      </div>
+      <div class="excel-mini-btn" id="xlImportBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>엑셀 업로드</span>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:0;">구글시트 전체 동기화 (월 1회 일괄 업데이트)</div>
+    <div class="gsheet-card" id="gsheetCard"></div>
+
+    <div class="progress-card" id="auditOverallCard" style="margin-bottom:0;"></div>
+  </div>
+  <div class="toolbar">
+    <div class="center-tabs" id="auditCenterTabs"></div>
+    <div class="search-row">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="auditSearchInput" placeholder="품목, 모델명, 구역 검색">
+        <button class="clear-btn" id="auditClearBtn">✕</button>
+      </div>
+      <button class="audit-toggle-btn" id="onlyUnauditedBtn">미확인만</button>
+    </div>
+  </div>
+  <div class="summary-bar" id="auditSummaryBar"></div>
+  <main id="auditMainContent"></main>
+</div>
+
+<div class="sheet-overlay" id="sheetOverlay">
+  <div class="sheet" id="sheetPanel"></div>
+</div>
+
+<input type="file" id="excelUploadInput" class="file-input-hidden" accept=".xlsx,.xls">
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<script>
+const BASE_DATA = [{"id": 0, "center": "1센터", "zone": "1구역", "category": "현장비품", "subcategory": "저울", "item": "LG 금성계기사", "model": "접시지시저울 50kg", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 1, "center": "1센터", "zone": "1창고", "category": "가전제품", "subcategory": "냉장고", "item": "냉장고", "model": "창홍 138B0W 138리터", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 2, "center": "1센터", "zone": "1창고", "category": "가전제품", "subcategory": "전자레인지", "item": "전자레인지 ", "model": "SK매직 MWO-M84A04", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 3, "center": "1센터", "zone": "1창고", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 8, "note": "", "source": "1센터비품현황"}, {"id": 4, "center": "1센터", "zone": "1창고", "category": "선풍기", "subcategory": "선풍기", "item": "벽결이선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 5, "center": "1센터", "zone": "1창고", "category": "소모품", "subcategory": "소모품", "item": "슬리퍼 / 삼선슬리퍼 290", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 6, "center": "1센터", "zone": "1창고", "category": "소모품", "subcategory": "소모품", "item": "신발장 / 젠트로 조립식 일자형 6단", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 7, "center": "1센터", "zone": "1창고", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 바이마르 VMK-0001", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 8, "center": "1센터", "zone": "1창고", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 CODE-PTCF500BG", "model": "", "status": "정상", "qty": 6, "note": "11/27 1센터 7개 구매 추가", "source": "1센터비품현황"}, {"id": 9, "center": "1센터", "zone": "1창고", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "정상", "qty": 5, "note": "폐기분 2개 재고반영 안했습니다.", "source": "1센터비품현황"}, {"id": 10, "center": "1센터", "zone": "1창고", "category": "제습기", "subcategory": "제습기", "item": "가야 KY-135P", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 11, "center": "1센터", "zone": "1창고", "category": "히터", "subcategory": "히터", "item": "대형 가스히터(스탠드형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 12, "center": "1센터", "zone": "1창고", "category": "히터", "subcategory": "히터", "item": "전기히터 우주전열 WH-5000S", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 13, "center": "1센터", "zone": "1창고", "category": "히터", "subcategory": "히터", "item": "전기히터 홍진테크 SF-800JC", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 14, "center": "1센터", "zone": "1층 슬라운드", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 15, "center": "1센터", "zone": "1층 슬라운드", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 16, "center": "1센터", "zone": "2창고", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 CODE-PTCF500BG", "model": "", "status": "정상", "qty": 2, "note": "11/27 1센터 7개 구매 추가", "source": "1센터비품현황"}, {"id": 17, "center": "1센터", "zone": "2창고", "category": "제습기", "subcategory": "제습기", "item": "가야 KY-135P", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 18, "center": "1센터", "zone": "2창고", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 19, "center": "1센터", "zone": "2창고", "category": "현장비품", "subcategory": "카트,선반", "item": "대차6(검정플라스틱)", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 20, "center": "1센터", "zone": "2창고", "category": "현장비품", "subcategory": "자바라", "item": "자바라컨베이어", "model": "DFC-4050", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 21, "center": "1센터", "zone": "2창고", "category": "히터", "subcategory": "히터", "item": "전기히터 홍진테크 SF-800JC", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 22, "center": "1센터", "zone": "3구역", "category": "현장비품", "subcategory": "스캐너", "item": "바코드 스캐너", "model": "도어스코리아 MQ160W", "status": "정상", "qty": 1, "note": "사용자·비치: 반품팀 사용", "source": "비품전체내역"}, {"id": 23, "center": "1센터", "zone": "4창고", "category": "비품", "subcategory": "비품", "item": "콤프레샤", "model": "계양 KAC-25 콤프레샤 2.5마력", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 24, "center": "1센터", "zone": "4창고", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 3, "note": "", "source": "1센터비품현황"}, {"id": 25, "center": "1센터", "zone": "4창고", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 홍진테크 IN-51H", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 26, "center": "1센터", "zone": "4창고", "category": "제습기", "subcategory": "제습기", "item": "JSENG JSD-1500A", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 27, "center": "1센터", "zone": "4창고", "category": "현장비품", "subcategory": "자바라", "item": "자바라컨베이어", "model": "DFC-4050", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 28, "center": "1센터", "zone": "4창고", "category": "히터", "subcategory": "히터", "item": "전기히터 우주전열 WH-5000S", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 29, "center": "1센터", "zone": "남/휴게실", "category": "에어컨", "subcategory": "에어컨", "item": "캐리어 CS-A061GSI", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 30, "center": "1센터", "zone": "불량(위치 미상)", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "불량", "qty": 4, "note": "", "source": "1센터비품현황"}, {"id": 31, "center": "1센터", "zone": "불량(위치 미상)", "category": "선풍기", "subcategory": "선풍기", "item": "선풍기", "model": "", "status": "불량", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 32, "center": "1센터", "zone": "불량(위치 미상)", "category": "온풍기", "subcategory": "온풍기", "item": "대형 온풍기 세기 CE-E035KP2", "model": "", "status": "불량", "qty": 1, "note": "12/4 1센터 제이닉스 온풍기12개중  7개 2센터로 3개 불량", "source": "1센터비품현황"}, {"id": 33, "center": "1센터", "zone": "사무실", "category": "가전제품", "subcategory": "프린터", "item": "복합기", "model": "후지 A3060CFPS", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 34, "center": "1센터", "zone": "사무실", "category": "에어컨", "subcategory": "에어컨", "item": "캐리어 CSV-Q075UI", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 35, "center": "1센터", "zone": "사무실", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 레이나 RH-2019", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 36, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "C타입 멀티허브 6 IN 1", "model": "C타입 멀티허브 6in1 usb (LS-U31MHS)", "status": "정상", "qty": 2, "note": "사용자·비치: 김기영", "source": "비품전체내역"}, {"id": 37, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "USB타입 멀티허브 4 IN 1", "model": "베이스어스 A타입 3.0 멀티 포트 Hub 4in1", "status": "정상", "qty": 1, "note": "사용자·비치: 김기영", "source": "비품전체내역"}, {"id": 38, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "노트북", "item": "노트북", "model": "레노버 V15 G4 13420H", "status": "정상", "qty": 1, "note": "사용자·비치: 김기영", "source": "비품전체내역"}, {"id": 39, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 40, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 41, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "한성컴퓨터 TFG27Q10P QHD IPS 100Hz ", "status": "정상", "qty": 2, "note": "사용자·비치: 김기영", "source": "비품전체내역"}, {"id": 42, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체 / 컴퓨존 조립 PC_R51435 5500GT", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 43, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "외장하드", "item": "와장하드 1TB", "model": "레토 2.5형 1TB L2SU2.0", "status": "정상", "qty": 1, "note": "사용자·비치: 김기영", "source": "비품전체내역"}, {"id": 44, "center": "1센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "키보드", "item": "키보드", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 45, "center": "1센터", "zone": "사무실", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 46, "center": "1센터", "zone": "여/휴게실", "category": "에어컨", "subcategory": "에어컨", "item": "LG SNC080BCW", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 47, "center": "1센터", "zone": "위치 미상", "category": "가구", "subcategory": "테이블", "item": "테이블 / 포밍 데이블 1500X900", "model": "", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 48, "center": "1센터", "zone": "위치 미상", "category": "가전제품", "subcategory": "냉장고", "item": "냉장고", "model": "대우 R11MO-W 118리터", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 49, "center": "1센터", "zone": "위치 미상", "category": "가전제품", "subcategory": "프린터", "item": "프린터", "model": "삼성", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 50, "center": "1센터", "zone": "위치 미상", "category": "비품", "subcategory": "그늘막", "item": "그늘막", "model": "3x2, 색상 지붕 - 브라운, 벽 - 베이지", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 51, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "게시판 / 알루미늄 10구 1220X835MM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 52, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "디지털 저울", "model": "전자식 디지털 주방저울 3KG", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 53, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안내판 / 휴게실2", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 54, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전모 /  KJH-001-0201 백색,로고부착", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 55, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전모걸이", "model": "안전모걸이", "status": "정상", "qty": 6, "note": "", "source": "비품전체내역"}, {"id": 56, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전벨트 / 코오롱 그네식 KDAWH-111", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 57, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전스티커 / 물류센터 안전 75X50CM", "model": "", "status": "정상", "qty": 8, "note": "", "source": "비품전체내역"}, {"id": 58, "center": "1센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "우비 / 파랑 L", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 59, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "강당걸레 / 스텐봉 + 120CM 걸레", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 60, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "고무 물밀대 / 92CM", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 61, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "마포걸레 / 스텐마포대 +극세사걸레 2P", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 62, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "빗자루 / 롱갈대비 ", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 63, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "빗자루 / 플라스틱 빗자리 쓰레받기 세트", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 64, "center": "1센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "탈수기 / 핸드형 마대 탈수기(중)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 65, "center": "1센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "멀티허브 / LS-U31MHS 맥북허브 6IN1", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 66, "center": "1센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "무선랜카드", "model": "ip time  N150UA3 11n 외장안테나형 USB", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 67, "center": "1센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 68, "center": "1센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "확장기", "item": "와이파이 / IP TIME EFMN300 확장기", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 69, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "작업대", "item": "고소 작업대", "model": "리프트 고공 작업대 74X74X94 CM", "status": "정상", "qty": 1, "note": "사용자·비치: 해외직구매", "source": "비품전체내역"}, {"id": 70, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "구형 플라스틱 3단 대+다용도함", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 71, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "소모품", "item": "물막이 워터가드", "model": "", "status": "정상", "qty": 8, "note": "", "source": "비품전체내역"}, {"id": 72, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "스캐너", "item": "바코드 스캐너", "model": "심코드 S950+거치대", "status": "정상", "qty": 1, "note": "사용자·비치: 비치장소 확인예정", "source": "비품전체내역"}, {"id": 73, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "XPRINTER 4B-2054N", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 74, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "소모품", "item": "에어충진기 / 삼일제약", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 비치장소 확인예정", "source": "비품전체내역"}, {"id": 75, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "소모품", "item": "자바라", "model": "", "status": "정상", "qty": 2, "note": "사용자·비치: 비치장소 확인예정", "source": "비품전체내역"}, {"id": 76, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "카트,선반", "item": "전동 쟈키", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 비치장소 확인예정", "source": "비품전체내역"}, {"id": 77, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "커팅기", "item": "커팅맨 / 로이텍 CM500 에어캡 커팅기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 78, "center": "1센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "카트,선반", "item": "핸드쟈키 / 쌍용리프트 DF-20E 2톤", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 79, "center": "1센터", "zone": "폐기(위치 미상)", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "폐기", "qty": 2, "note": "폐기분 2개 재고반영 안했습니다.", "source": "1센터비품현황"}, {"id": 80, "center": "1센터", "zone": "흡연실", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 바이마르 VMK-0001", "model": "", "status": "정상", "qty": 1, "note": "", "source": "1센터비품현황"}, {"id": 81, "center": "2센터", "zone": "1구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 8, "note": "", "source": "비품전체내역"}, {"id": 82, "center": "2센터", "zone": "1구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 11, "note": "", "source": "비품전체내역"}, {"id": 83, "center": "2센터", "zone": "1구역", "category": "가구", "subcategory": "테이블", "item": "테이블 / 포밍 데이블 1500X900", "model": "", "status": "정상", "qty": 8, "note": "", "source": "비품전체내역"}, {"id": 84, "center": "2센터", "zone": "1구역", "category": "가전제품", "subcategory": "청소기", "item": "청소기", "model": "에비앙 GS-VC1930R", "status": "확인필요", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 85, "center": "2센터", "zone": "1구역", "category": "가전제품", "subcategory": "프린터", "item": "프린터", "model": "이지모비 RT-RP420KR", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 86, "center": "2센터", "zone": "1구역", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 2, "note": "", "source": "2센터비품현황"}, {"id": 87, "center": "2센터", "zone": "1구역", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "정상", "qty": 2, "note": "", "source": "2센터비품현황"}, {"id": 88, "center": "2센터", "zone": "1구역", "category": "선풍기", "subcategory": "선풍기", "item": "미니 써큐레이터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 89, "center": "2센터", "zone": "1구역", "category": "선풍기", "subcategory": "선풍기", "item": "벽면선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 90, "center": "2센터", "zone": "1구역", "category": "선풍기", "subcategory": "선풍기", "item": "선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 91, "center": "2센터", "zone": "1구역", "category": "소모품", "subcategory": "소모품", "item": "전자시계 / 원격제어 디지털 벽시계 대형", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 92, "center": "2센터", "zone": "1구역", "category": "소모품", "subcategory": "전화기", "item": "전화기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 93, "center": "2센터", "zone": "1구역", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "정상", "qty": 1, "note": "12/4 입고분 반영( 사용가능4, 불량3)", "source": "2센터비품현황"}, {"id": 94, "center": "2센터", "zone": "1구역", "category": "제습기", "subcategory": "제습기", "item": "가야 KY-135P", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 95, "center": "2센터", "zone": "1구역", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 96, "center": "2센터", "zone": "1구역", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 97, "center": "2센터", "zone": "1구역", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 98, "center": "2센터", "zone": "1구역", "category": "컴퓨터용품", "subcategory": "키보드", "item": "키보드", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 99, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "구형 플라스틱 2단 특대", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 100, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "구형 플라스틱 3단 대", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 101, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차2(초록카트)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 102, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차3(빨강카트)", "model": "접이식 빨간밑판 610X920 ", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 103, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "2단(중)", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 104, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "리빙코아 이동식 900M 4단", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 105, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "이동식 450X900M 4단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 106, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "390X1200X1200 3단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 107, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "25파이 390X900X1200 5단", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 108, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "스캐너", "item": "바코드 스캐너", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 109, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "회색", "status": "확인필요", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 110, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "검정", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 111, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "XPRINTER 4B-2054N", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 112, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "카트,선반", "item": "전동 쟈키", "model": "쌍용 EPL1531", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 113, "center": "2센터", "zone": "1구역", "category": "현장비품", "subcategory": "행거", "item": "행거", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 114, "center": "2센터", "zone": "1구역", "category": "히터", "subcategory": "히터", "item": "대형 가스히터(스탠드형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 115, "center": "2센터", "zone": "1구역", "category": "히터", "subcategory": "히터", "item": "전기히터 홍진테크 SF-800JC", "model": "", "status": "정상", "qty": 2, "note": "", "source": "2센터비품현황"}, {"id": 116, "center": "2센터", "zone": "2구역", "category": "가전제품", "subcategory": "청소기", "item": "청소기", "model": "클레온 S-402", "status": "확인필요", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 117, "center": "2센터", "zone": "2구역", "category": "현장비품", "subcategory": "행거", "item": "행거", "model": "", "status": "정상", "qty": 11, "note": "", "source": "비품전체내역"}, {"id": 118, "center": "2센터", "zone": "2센터", "category": "비품", "subcategory": "그늘막", "item": "그늘막", "model": "3x2, 색상 지붕 - 브라운, 벽 - 베이지", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 119, "center": "2센터", "zone": "2창고", "category": "현장비품", "subcategory": "저울", "item": "LG 금성계기사", "model": "접시지시저울 50kg", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 120, "center": "2센터", "zone": "3구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 8, "note": "", "source": "비품전체내역"}, {"id": 121, "center": "2센터", "zone": "3구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 122, "center": "2센터", "zone": "3구역", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 123, "center": "2센터", "zone": "3구역", "category": "선풍기", "subcategory": "선풍기", "item": "미니 써큐레이터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 124, "center": "2센터", "zone": "3구역", "category": "소모품", "subcategory": "소모품", "item": "초음파퇴치기(벌레) / 충전기", "model": "제논 UDR-040 ", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 125, "center": "2센터", "zone": "3구역", "category": "온풍기", "subcategory": "온풍기", "item": "대형 온풍기 HIPERS", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 126, "center": "2센터", "zone": "3구역", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 CODE-PTCF500BG", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 127, "center": "2센터", "zone": "3구역", "category": "제습기", "subcategory": "제습기", "item": "나우이엘 NED-150", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 128, "center": "2센터", "zone": "3구역", "category": "제습기", "subcategory": "제습기", "item": "비앰비 LD-SD-1380", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 129, "center": "2센터", "zone": "3구역", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 130, "center": "2센터", "zone": "3구역", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 131, "center": "2센터", "zone": "3구역", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 132, "center": "2센터", "zone": "3구역", "category": "컴퓨터용품", "subcategory": "키보드", "item": "키보드", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 133, "center": "2센터", "zone": "3구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "구형 플라스틱 2단 특대", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 134, "center": "2센터", "zone": "3구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차5(검정카트)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 135, "center": "2센터", "zone": "3구역", "category": "현장비품", "subcategory": "스캐너", "item": "바코드 스캐너", "model": "심코드 S950+거치대", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 136, "center": "2센터", "zone": "3구역", "category": "히터", "subcategory": "히터", "item": "등유히터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 137, "center": "2센터", "zone": "4구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 28, "note": "사용자·비치: 2층/회의실", "source": "비품전체내역"}, {"id": 138, "center": "2센터", "zone": "4구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 10, "note": "사용자·비치: 2층/회의실", "source": "비품전체내역"}, {"id": 139, "center": "2센터", "zone": "4구역", "category": "가전제품", "subcategory": "냉장고", "item": "미니 냉장고", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 사무실 사용", "source": "비품전체내역"}, {"id": 140, "center": "2센터", "zone": "4구역", "category": "가전제품", "subcategory": "프로젝트", "item": "빔 프로젝트", "model": "벤큐 MX560", "status": "정상", "qty": 1, "note": "사용자·비치: 2층/회의실", "source": "비품전체내역"}, {"id": 141, "center": "2센터", "zone": "4구역", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 142, "center": "2센터", "zone": "4구역", "category": "소모품", "subcategory": "소모품", "item": "마이크", "model": "타이칸 2채널 HUF 송수신기", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 143, "center": "2센터", "zone": "4구역", "category": "에어컨", "subcategory": "에어컨", "item": "위니아 MPBW18GBHB (스탠드형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 144, "center": "2센터", "zone": "4구역", "category": "제습기", "subcategory": "제습기", "item": "위닉스 DOP-4905T", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 145, "center": "2센터", "zone": "4구역", "category": "컴퓨터용품", "subcategory": "노트북", "item": "노트북", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 2층/회의실", "source": "비품전체내역"}, {"id": 146, "center": "2센터", "zone": "4구역", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 2층/회의실", "source": "비품전체내역"}, {"id": 147, "center": "2센터", "zone": "4구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "3단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 148, "center": "2센터", "zone": "4구역", "category": "히터", "subcategory": "히터", "item": "전기히터 홍진테크 SF-800JC", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 149, "center": "2센터", "zone": "6구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 150, "center": "2센터", "zone": "6구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 151, "center": "2센터", "zone": "6구역", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 152, "center": "2센터", "zone": "6구역", "category": "컴퓨터용품", "subcategory": "노트북", "item": "노트북", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 153, "center": "2센터", "zone": "6구역", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 154, "center": "2센터", "zone": "6구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차2(초록카트)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 155, "center": "2센터", "zone": "6구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차6(검정플라스틱)", "model": "2단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 156, "center": "2센터", "zone": "6구역", "category": "현장비품", "subcategory": "행거", "item": "행거", "model": "", "status": "정상", "qty": 15, "note": "", "source": "비품전체내역"}, {"id": 157, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "서랍장", "item": "나무선반", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 158, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "서랍장", "item": "사복보관서랍", "model": "4칸", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 159, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "서랍장", "item": "서랍장", "model": "2칸", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 160, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 17, "note": "", "source": "비품전체내역"}, {"id": 161, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 162, "center": "2센터", "zone": "7구역", "category": "가구", "subcategory": "테이블", "item": "테이블 / 포밍 데이블 1500X900", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 163, "center": "2센터", "zone": "7구역", "category": "가전제품", "subcategory": "냉장고", "item": "LG 디오스 냉장고", "model": "LG 디오스 R-T852DBKBL", "status": "정상", "qty": 1, "note": "대표님", "source": "비품전체내역"}, {"id": 164, "center": "2센터", "zone": "7구역", "category": "가전제품", "subcategory": "전기포트", "item": "전기포트", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 165, "center": "2센터", "zone": "7구역", "category": "가전제품", "subcategory": "전자레인지", "item": "전자레인지", "model": "매직쉐프 MEM-GS20W", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 166, "center": "2센터", "zone": "7구역", "category": "가전제품", "subcategory": "전자레인지", "item": "쿠쿠 전자레인지", "model": "쿠쿠 DMW-2310DW", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 167, "center": "2센터", "zone": "7구역", "category": "가전제품", "subcategory": "토스트기", "item": "토스트기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 168, "center": "2센터", "zone": "7구역", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 169, "center": "2센터", "zone": "7구역", "category": "소모품", "subcategory": "소모품", "item": "거울", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 170, "center": "2센터", "zone": "7구역", "category": "소모품", "subcategory": "소모품", "item": "게시판 / 알루미늄 10구 1220X835MM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 171, "center": "2센터", "zone": "7구역", "category": "소모품", "subcategory": "소모품", "item": "사다리", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 172, "center": "2센터", "zone": "7구역", "category": "소모품", "subcategory": "소모품", "item": "주전자 / 키친아트 스텐 주전자 0.7리터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 173, "center": "2센터", "zone": "7구역", "category": "에어컨", "subcategory": "에어컨", "item": "캐리어 EARB-0081FAWSDI", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 174, "center": "2센터", "zone": "7구역", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 바이마르 VMK-0001터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 175, "center": "2센터", "zone": "7구역", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "정상", "qty": 1, "note": "12/4 입고분 반영( 사용가능4, 불량3)", "source": "2센터비품현황"}, {"id": 176, "center": "2센터", "zone": "7구역", "category": "제습기", "subcategory": "제습기", "item": "씽크에어 DL20", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 177, "center": "2센터", "zone": "7구역", "category": "제습기", "subcategory": "제습기", "item": "위니아 EDH10ENWA", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 178, "center": "2센터", "zone": "7구역", "category": "제습기", "subcategory": "제습기", "item": "위닉스 DHC-167IPW", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 179, "center": "2센터", "zone": "7구역", "category": "제습기", "subcategory": "제습기", "item": "위닉스 DOP-4905T", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 180, "center": "2센터", "zone": "7구역", "category": "제습기", "subcategory": "제습기", "item": "한솔 TSD-08L", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 181, "center": "2센터", "zone": "7구역", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 4, "note": "사용자·비치: 탕비실 보관용", "source": "비품전체내역"}, {"id": 182, "center": "2센터", "zone": "7구역", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 작동확인", "source": "비품전체내역"}, {"id": 183, "center": "2센터", "zone": "7구역", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 작동확인", "source": "비품전체내역"}, {"id": 184, "center": "2센터", "zone": "7구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "3단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 185, "center": "2센터", "zone": "7구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "2단(대)", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 186, "center": "2센터", "zone": "7구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "25파이 610X1820X900 4단", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 187, "center": "2센터", "zone": "7구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차6(검정플라스틱)", "model": "3단", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 188, "center": "2센터", "zone": "8구역", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 189, "center": "2센터", "zone": "8구역", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 190, "center": "2센터", "zone": "8구역", "category": "가전제품", "subcategory": "청소기", "item": "청소기", "model": "LG V-P1160T, 제이스인터 BMB110040", "status": "확인필요", "qty": 2, "note": "사용자·비치: 작동확인예정", "source": "비품전체내역"}, {"id": 191, "center": "2센터", "zone": "8구역", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 192, "center": "2센터", "zone": "8구역", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 193, "center": "2센터", "zone": "8구역", "category": "소모품", "subcategory": "소모품", "item": "거울", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 194, "center": "2센터", "zone": "8구역", "category": "소모품", "subcategory": "소모품", "item": "사다리", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 195, "center": "2센터", "zone": "8구역", "category": "에어컨", "subcategory": "에어컨", "item": "LG FNC153GBVW (스탠드형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 196, "center": "2센터", "zone": "8구역", "category": "에어컨", "subcategory": "에어컨", "item": "한솔 HPC-5600K (이동형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 197, "center": "2센터", "zone": "8구역", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 CODE-PTCF500BG", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 198, "center": "2센터", "zone": "8구역", "category": "현장비품", "subcategory": "카트,선반", "item": "대차1(회색플라스틱)", "model": "3단", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 199, "center": "2센터", "zone": "8구역", "category": "현장비품", "subcategory": "카트,선반", "item": "수동 쟈키", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 200, "center": "2센터", "zone": "8구역", "category": "히터", "subcategory": "히터", "item": "전기히터 홍진테크 SF-800JC", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 201, "center": "2센터", "zone": "C창고", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 202, "center": "2센터", "zone": "C창고", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 203, "center": "2센터", "zone": "C창고", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 204, "center": "2센터", "zone": "C창고", "category": "제습기", "subcategory": "제습기", "item": "나우이엘 NED-150", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 205, "center": "2센터", "zone": "C창고", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 206, "center": "2센터", "zone": "C창고", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 207, "center": "2센터", "zone": "C창고", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 208, "center": "2센터", "zone": "C창고", "category": "컴퓨터용품", "subcategory": "키보드", "item": "키보드", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 209, "center": "2센터", "zone": "C창고", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "2단(대)", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 210, "center": "2센터", "zone": "C창고", "category": "현장비품", "subcategory": "카트,선반", "item": "수동 쟈키", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 211, "center": "2센터", "zone": "불량(위치 미상)", "category": "라디에이터", "subcategory": "라디에이터", "item": "한양테크 HY-W05T", "model": "", "status": "불량", "qty": 1, "note": "바퀴불량,작동안됨", "source": "2센터비품현황"}, {"id": 212, "center": "2센터", "zone": "불량(위치 미상)", "category": "선풍기", "subcategory": "선풍기", "item": "JNIX선풍기", "model": "", "status": "불량", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 213, "center": "2센터", "zone": "불량(위치 미상)", "category": "선풍기", "subcategory": "선풍기", "item": "대형선풍기", "model": "", "status": "불량", "qty": 2, "note": "", "source": "2센터비품현황"}, {"id": 214, "center": "2센터", "zone": "불량(위치 미상)", "category": "에어컨", "subcategory": "에어컨", "item": "위니아 PA-317 (스탠드형)", "model": "", "status": "불량", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 215, "center": "2센터", "zone": "불량(위치 미상)", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "불량", "qty": 3, "note": "12/4 입고분 반영( 사용가능4, 불량3)", "source": "2센터비품현황"}, {"id": 216, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "서랍장", "item": "나무선반", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 217, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "테이블", "item": "대표님테이블", "model": "테이블 1800X800X720", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 218, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "테이블", "item": "대표님테이블", "model": "사이드 테이블 1200X450X700", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 219, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "테이블", "item": "대표님테이블", "model": "테이블 서랍 400X520X590", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 220, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "책장", "item": "사무용 책장", "model": "사무용책장 800X400X1880 파스텔", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 221, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "서랍장", "item": "서랍장", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 222, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 19, "note": "사용자·비치: 임원실; 사용자·비치: 회의실", "source": "비품전체내역"}, {"id": 223, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "테이블", "item": "테이블", "model": "", "status": "정상", "qty": 12, "note": "사용자·비치: 임원실; 사용자·비치: 회의실", "source": "비품전체내역"}, {"id": 224, "center": "2센터", "zone": "사무실", "category": "가구", "subcategory": "테이블", "item": "테이블 / 포밍 데이블 1200X900", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 225, "center": "2센터", "zone": "사무실", "category": "가전제품", "subcategory": "TV", "item": "TV", "model": "", "status": "정상", "qty": 1, "note": "사용자·비치: 회의실", "source": "비품전체내역"}, {"id": 226, "center": "2센터", "zone": "사무실", "category": "가전제품", "subcategory": "프린터", "item": "복합기", "model": "후지 AC2561CFPS", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 227, "center": "2센터", "zone": "사무실", "category": "가전제품", "subcategory": "정수기", "item": "정수기", "model": "청호 CHP-5380S2", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 228, "center": "2센터", "zone": "사무실", "category": "가전제품", "subcategory": "청소기", "item": "청소기", "model": "LG V-C412T", "status": "정상", "qty": 1, "note": "사용자·비치: 회의실", "source": "비품전체내역"}, {"id": 229, "center": "2센터", "zone": "사무실", "category": "가전제품", "subcategory": "커피머신", "item": "커피머신", "model": "쿠쿠 CCM-CAE2010LW 화이트", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 230, "center": "2센터", "zone": "사무실", "category": "비품", "subcategory": "비품", "item": "소형금고", "model": "BK 금고 대형", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 231, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "LED 충전식 캠핑조명 USB조명 A", "model": "LED 충전식 캠핑조명 USB조명 A", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 232, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "게시판 / 투명 아크릴 액자 A4", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 233, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "기타", "model": "나푸아 NG157M OM바디 입문용 통기타", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 234, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "기타 받침", "model": "나푸아 NG157M OM바디 입문용 통기타", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 235, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "낚시대", "model": "GDF 서프 시드 25-450 원투낚시대", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 236, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "낚시용기포기 기포발생기", "model": "낚시용기포기 기포발생기", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 237, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "드릴 18종 롱비트소켓", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 238, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "매트 / 브라운 130X1CM 95RO/2CM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 239, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "모니터받침대 / 스탠드 2단", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 240, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "보조배터리", "model": "루트웨이 보조배터리 PB700W-UPS", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 241, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "서류함 / 컴팩트 파일 캐비닛 4단", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 242, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "스텐레스 6인용 코펠", "model": "캠핑문 올뉴3중 6인용 코펠 P0000EUG", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 243, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "액자", "model": "대형액자 178X88 델타무라호수", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 244, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "옷걸이 / 원목스텐드옷걸이", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 245, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "우산꽂이 / 철제 사각 18X55CM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 246, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "전신거울 / 붙이는 거울 400X1200MM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 247, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "전신거울 / 스탠드 거치형 400X1500MM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 248, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "전신거울 / 스탠드 전신경 400X1500MM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 249, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "전화기", "item": "전화기", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 250, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "책상 수납정리함", "model": "BLOWFISH FUGU 책상 수납정리함", "status": "정상", "qty": 1, "note": "사용자·비치: 이선주 팀장님", "source": "비품전체내역"}, {"id": 251, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "캠핑박스", "model": "75L 캠핑박스 (이동 손잡이 포함) / 그린", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 252, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "캠핑박스_우드상판", "model": "75L 캠핑박스 우드상판", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 253, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "화이트보드", "model": "화이트보드 850X1200", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 254, "center": "2센터", "zone": "사무실", "category": "소모품", "subcategory": "소모품", "item": "화이트보드 / 850X1200 대형", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 255, "center": "2센터", "zone": "사무실", "category": "에어컨", "subcategory": "에어컨", "item": "LG FNC153GBVW (스탠드형)", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 256, "center": "2센터", "zone": "사무실", "category": "오방난로", "subcategory": "오방난로", "item": "오방 난로 바이마르 VMK-0001터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 257, "center": "2센터", "zone": "사무실", "category": "온풍기", "subcategory": "온풍기", "item": "미니 온풍기 제이닉스 JY-901F", "model": "", "status": "정상", "qty": 4, "note": "12/4 입고분 반영( 사용가능4, 불량3)", "source": "2센터비품현황"}, {"id": 258, "center": "2센터", "zone": "사무실", "category": "청소용품", "subcategory": "송풍기", "item": "송풍기", "model": "헤몬 21V 무선 송풍기", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 259, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "데스크탑 램", "item": "DDR3 4G PC3 12800U 램 4기가 데스크탑", "model": "삼성 DDR3 4G 12800U 단면", "status": "정상", "qty": 3, "note": "1센터 pc전달 / 사용자·비치: 사무실 사용", "source": "비품전체내역"}, {"id": 260, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "노트북", "item": "노트북", "model": "", "status": "정상", "qty": 3, "note": "사용자·비치: 임원실", "source": "비품전체내역"}, {"id": 261, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "노트북", "item": "노트북", "model": "LG 17인지 인텔 I7-1360 16G", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 262, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 263, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "모니터", "item": "모니터", "model": "", "status": "정상", "qty": 12, "note": "사용자·비치: 임원실", "source": "비품전체내역"}, {"id": 264, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "키보드", "item": "무선키보드 세트", "model": "지클릭커 WMK60", "status": "정상", "qty": 1, "note": "사용자·비치: 대표님", "source": "비품전체내역"}, {"id": 265, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "본체", "item": "본체", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 266, "center": "2센터", "zone": "사무실", "category": "컴퓨터용품", "subcategory": "키보드", "item": "키보드", "model": "", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 267, "center": "2센터", "zone": "사무실", "category": "현장비품", "subcategory": "바코드 프린터", "item": "바코드 프린터", "model": "XPRINTER 4B-2054N", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 268, "center": "2센터", "zone": "샤워실", "category": "가전제품", "subcategory": "세탁기", "item": "LG 세탁기", "model": "LG 세탁기 TR14BK1", "status": "정상", "qty": 1, "note": "대표님", "source": "비품전체내역"}, {"id": 269, "center": "2센터", "zone": "샤워실", "category": "가전제품", "subcategory": "세탁기", "item": "일렉스 미니세탁기", "model": "일렉스 미니세탁기 HS-MW3150G", "status": "정상", "qty": 1, "note": "대표님", "source": "비품전체내역"}, {"id": 270, "center": "2센터", "zone": "샤워실", "category": "소모품", "subcategory": "소모품", "item": "안내판 / 사용중입니다. 20X20CM", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 271, "center": "2센터", "zone": "외부", "category": "가구", "subcategory": "의자", "item": "의자", "model": "", "status": "정상", "qty": 6, "note": "사용자·비치: 외부", "source": "비품전체내역"}, {"id": 272, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "LED 조명 / 솔라콤 센서등", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 273, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "농구 그물망 /12X7X21 2개입", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 274, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "농구공 / 월슨 WTB7209XBO7 7호", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 275, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "농구공 / 주머니", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 276, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "세차용 호수 / 코일호스 15M", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 277, "center": "2센터", "zone": "외부", "category": "소모품", "subcategory": "소모품", "item": "예초기", "model": "나리온 21V 무선 예초기", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 278, "center": "2센터", "zone": "위치 미상", "category": "가전제품", "subcategory": "청소기", "item": "진공 청소기", "model": "휴앤봇 HNB-030 업소용", "status": "정상", "qty": 1, "note": "사용자·비치: 위치 확인예정", "source": "비품전체내역"}, {"id": 279, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "LED 조명 / 씨티오 슬림 평판등 50W", "model": "", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 280, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "검정 방수천 암막원단 / ws10013 4개", "model": "", "status": "정상", "qty": 6, "note": "", "source": "비품전체내역"}, {"id": 281, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "멀티탭 / 개별스위치 6구, 7M", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 282, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "배너 폴대 / X배너 프래임 폴대", "model": "", "status": "정상", "qty": 100, "note": "", "source": "비품전체내역"}, {"id": 283, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전모 /  KJH-001-0201 백색,로고부착", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 284, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전모걸이", "model": "안전모걸이", "status": "정상", "qty": 4, "note": "", "source": "비품전체내역"}, {"id": 285, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "안전스티커 / 물류센터 안전 75X50CM", "model": "", "status": "정상", "qty": 7, "note": "", "source": "비품전체내역"}, {"id": 286, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "공구", "item": "전동드릴충전기 / HANDZ 12V RXP ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 287, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "전자시계 / 원격제어 디지털 벽시계 대형", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 288, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "폼보드 / 게시물 부착시 610X910 30장", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 289, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "화이트보드 / 붙이는 월간 화이트보드", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 290, "center": "2센터", "zone": "위치 미상", "category": "소모품", "subcategory": "소모품", "item": "휴게실2,탕비실,회의실,임원실,사무실", "model": "", "status": "정상", "qty": 6, "note": "", "source": "비품전체내역"}, {"id": 291, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "강당걸레 / 스텐봉 + 120CM 걸레", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 292, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "기름걸레 / 리스킹오일 2L", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 293, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "기름걸레 / 리스킹오일 500ML", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 294, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "기름걸레 / 리스킹오일 650ML", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 295, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "기름걸레 / 바닥 기름밀대 대걸레 120CM ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 296, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "기름걸레 / 바닥 기름밀대 대걸레 60CM ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 297, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "빗자루 / 특갈대비 ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 298, "center": "2센터", "zone": "위치 미상", "category": "청소용품", "subcategory": "청소용품", "item": "빗자루 쓰레받이 / 특갈대비 ", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 299, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "외장하드", "item": "USB / 삼성 MUF-64DA(ST)  64GB", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 300, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "노트북 / TYPE-A 65W 케이블", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 301, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "리모컨", "item": "리모컨 빔 / 로지텍 무선 스마트 포인터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 302, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스", "model": "LG 유선 마우스 M-1000", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 303, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "마우스", "item": "마우스 / 로지텍 무선 광마우스 M331", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 304, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "멀티 케이블 / 베타 3 IN 1 케이블", "model": "", "status": "정상", "qty": 3, "note": "", "source": "비품전체내역"}, {"id": 305, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "멀티 케이블 / 신지모루 3 IN 1 케이블", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 306, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "멀티 허브 / 코시 USB 4포트 멀티허브", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 307, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "와이파이 / 무선 수신기 N150UA2", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 308, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "와이파이 / 아이나비 동글 티콘+USB 2.1", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 309, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "외장하드", "item": "외장하드 / 도시바 1TB 와장하드", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 310, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "젠더 / AV TO HDMI 변환 컨버터", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 311, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "젠더 / HDMI TO VGA 모니터 변환젠더 ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 312, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "젠더 / 듀얼 C타입 노트북 랜선젠더 ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 313, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "젠터 / HDMI TO RGB 모니터 변환젠더 ", "model": "", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 314, "center": "2센터", "zone": "위치 미상", "category": "컴퓨터용품", "subcategory": "젠더,케이블", "item": "케이블 / 케이엘컴 HDMI 케이블 V2.0", "model": "", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 315, "center": "2센터", "zone": "위치 미상", "category": "현장비품", "subcategory": "카트,선반", "item": "대차4(은색)", "model": "오즈리빙 이동식 4단", "status": "정상", "qty": 5, "note": "", "source": "비품전체내역"}, {"id": 316, "center": "2센터", "zone": "임원실", "category": "제습기", "subcategory": "제습기", "item": "씽크에어 DL20", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 317, "center": "2센터", "zone": "화장실", "category": "라디에이터", "subcategory": "라디에이터", "item": "이엠케이 ER-6313", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}, {"id": 318, "center": "2센터", "zone": "화장실", "category": "소모품", "subcategory": "소모품", "item": "방충망 / 작석식 현관 모기장", "model": "블랙 / 90X210CM", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 319, "center": "2센터", "zone": "화장실", "category": "소모품", "subcategory": "소모품", "item": "수건걸이", "model": "아리코 스테인레스 수건걸이", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 320, "center": "2센터", "zone": "화장실", "category": "소모품", "subcategory": "소모품", "item": "유리닦이", "model": "메오 길이조절 경량 알루미늄 유리닦이", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 321, "center": "2센터", "zone": "화장실", "category": "소모품", "subcategory": "소모품", "item": "청소용 브러쉬", "model": "코멧 욕실 청소용 브러쉬", "status": "정상", "qty": 1, "note": "", "source": "비품전체내역"}, {"id": 322, "center": "2센터", "zone": "화장실", "category": "소모품", "subcategory": "소모품", "item": "코너선반", "model": "\n포유리빙 무타공 욕실 코너 선반", "status": "정상", "qty": 2, "note": "", "source": "비품전체내역"}, {"id": 323, "center": "2센터", "zone": "회의실", "category": "가전제품", "subcategory": "냉장고", "item": "삼성 미니 냉장고", "model": "삼성 미니 냉장고 SRD050DN", "status": "정상", "qty": 1, "note": "대표님", "source": "비품전체내역"}, {"id": 324, "center": "2센터", "zone": "회의실", "category": "에어컨", "subcategory": "에어컨", "item": "LG SNC103BAW", "model": "", "status": "정상", "qty": 1, "note": "", "source": "2센터비품현황"}];
+</script>
+<script>
+/* ===================== State & Storage ===================== */
+const STATUS_ORDER = ['정상','불량','폐기','확인필요'];
+const STATUS_COLOR = { '정상':'var(--ok)', '불량':'var(--bad)', '폐기':'var(--waste)', '확인필요':'var(--check)' };
+
+let overrides = {};
+let audits = {};
+let editlog = [];
+let settings = {};
+let gsheetSyncMap = {};
+let requests = {};
+let scanners = {};
+let nextNewId = 100000;
+let nextReqId = 1;
+let nextScannerId = 1;
+
+const state = {
+  view: 'dashboard',
+  list: { center: '전체', query: '', status: 'all', collapsed: new Set() },
+  machine: { center: '전체', query: '', status: 'all', collapsed: new Set() },
+  audit: { center: '전체', query: '', onlyUnaudited: true, collapsed: new Set() },
+  editUnlocked: false,
+};
+
+/* ===================== Storage helpers ===================== */
+async function loadAll() {
+  overrides = await safeGet('overrides', {});
+  audits = await safeGet('audits', {});
+  editlog = await safeGet('editlog', []);
+  settings = await safeGet('settings', {});
+  gsheetSyncMap = await safeGet('gsheetSyncMap', {});
+  requests = await safeGet('requests', {});
+  scanners = await safeGet('scanners', {});
+  const ids = Object.keys(overrides).map(k => parseInt(k)).filter(n => n >= 100000);
+  if (ids.length) nextNewId = Math.max(...ids) + 1;
+  const reqIds = Object.keys(requests).map(k => parseInt(k.replace('req',''))).filter(n => !isNaN(n));
+  if (reqIds.length) nextReqId = Math.max(...reqIds) + 1;
+  const scanIds = Object.keys(scanners).map(k => parseInt(k.replace('sc',''))).filter(n => !isNaN(n));
+  if (scanIds.length) nextScannerId = Math.max(...scanIds) + 1;
+}
+async function safeGet(key, fallback) {
+  try {
+    const res = await window.storage.get(key, true);
+    if (res && res.value !== undefined) return JSON.parse(res.value);
+    return fallback;
+  } catch (e) { return fallback; }
+}
+async function safeSet(key, value, _retried) {
+  try {
+    await window.storage.set(key, JSON.stringify(value), true);
+    return true;
+  } catch (e) {
+    console.error('storage set failed', key, e);
+    if (!_retried) {
+      // transient server hiccups happen occasionally — wait briefly and try once more
+      await new Promise(r => setTimeout(r, 700));
+      return safeSet(key, value, true);
+    }
+    return false;
+  }
+}
+function pushLog(text) {
+  editlog.unshift({ ts: new Date().toISOString(), text });
+  editlog = editlog.slice(0, 100);
+  safeSet('editlog', editlog);
+}
+
+/* ===================== Data merge ===================== */
+function getEffectiveData() {
+  const map = {};
+  BASE_DATA.forEach(d => { map[d.id] = { ...d }; });
+  Object.keys(overrides).forEach(idStr => {
+    const id = parseInt(idStr);
+    map[id] = { ...(map[id] || {}), ...overrides[idStr], id };
+  });
+  return Object.values(map).filter(d => !d.deleted);
+}
+function getAudit(id) { return audits[id] || null; }
+
+const REQUEST_TYPES = ['확인요청','불량처리요청','A/S요청'];
+function getPendingRequests(id) {
+  return Object.entries(requests).filter(([rid, r]) => r.itemId === id && r.status === 'pending').map(([rid, r]) => ({ ...r, rid }));
+}
+function getAllRequests(id) {
+  return Object.entries(requests).filter(([rid, r]) => r.itemId === id).map(([rid, r]) => ({ ...r, rid })).sort((a,b) => b.requestedAt.localeCompare(a.requestedAt));
+}
+
+/* ===================== Crypto (PIN) ===================== */
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function handleLockClick() {
+  if (state.editUnlocked) {
+    state.editUnlocked = false; renderLockBtn(); showToast('편집 잠금이 설정되었습니다'); return;
+  }
+  const ok = await requestUnlock();
+  if (ok) showToast('편집 잠금이 해제되었습니다');
+}
+function requestUnlock() {
+  return new Promise(async (resolve) => {
+    if (!settings.pinHash) {
+      const p1 = await customPrompt('편집 PIN을 새로 설정하세요 (4자리 이상 숫자/문자)', { type: 'password' });
+      if (!p1) { resolve(false); return; }
+      const p2 = await customPrompt('PIN을 다시 한 번 입력하세요', { type: 'password' });
+      if (p1 !== p2) { await customAlert('입력한 PIN이 서로 다릅니다. 다시 시도해주세요.'); resolve(false); return; }
+      settings.pinHash = await sha256(p1);
+      await safeSet('settings', settings);
+      state.editUnlocked = true; renderLockBtn(); resolve(true); return;
+    }
+    const p = await customPrompt('편집 PIN을 입력하세요', { type: 'password' });
+    if (p === null) { resolve(false); return; }
+    const hash = await sha256(p);
+    if (hash === settings.pinHash) { state.editUnlocked = true; renderLockBtn(); resolve(true); }
+    else { await customAlert('PIN이 올바르지 않습니다.'); resolve(false); }
+  });
+}
+function renderLockBtn() {
+  const btn = document.getElementById('lockBtn');
+  btn.classList.toggle('unlocked', state.editUnlocked);
+  btn.innerHTML = state.editUnlocked
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>편집 가능`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>잠김`;
+}
+
+/* ===================== Toast ===================== */
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ===================== Custom modal (published/embedded artifacts often block window.prompt/alert/confirm) ===================== */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalBox = document.getElementById('modalBox');
+
+function customAlert(msg) {
+  return new Promise((resolve) => {
+    modalBox.innerHTML = `<div class="modal-msg">${escapeHtml(msg)}</div><div class="modal-actions"><button class="modal-btn primary" id="modalOkBtn">확인</button></div>`;
+    modalOverlay.classList.add('open');
+    document.getElementById('modalOkBtn').onclick = () => { modalOverlay.classList.remove('open'); resolve(); };
+  });
+}
+function customConfirm(msg) {
+  return new Promise((resolve) => {
+    modalBox.innerHTML = `<div class="modal-msg">${escapeHtml(msg)}</div><div class="modal-actions"><button class="modal-btn secondary" id="modalCancelBtn">취소</button><button class="modal-btn primary" id="modalOkBtn">확인</button></div>`;
+    modalOverlay.classList.add('open');
+    document.getElementById('modalCancelBtn').onclick = () => { modalOverlay.classList.remove('open'); resolve(false); };
+    document.getElementById('modalOkBtn').onclick = () => { modalOverlay.classList.remove('open'); resolve(true); };
+  });
+}
+function customPrompt(msg, opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    modalBox.innerHTML = `<div class="modal-msg">${escapeHtml(msg)}</div><input type="${opts.type || 'text'}" class="modal-input" id="modalInput" placeholder="${escapeAttr(opts.placeholder || '')}" autocomplete="off"><div class="modal-actions"><button class="modal-btn secondary" id="modalCancelBtn">취소</button><button class="modal-btn primary" id="modalOkBtn">확인</button></div>`;
+    modalOverlay.classList.add('open');
+    const input = document.getElementById('modalInput');
+    setTimeout(() => input.focus(), 60);
+    const finish = (val) => { modalOverlay.classList.remove('open'); resolve(val); };
+    document.getElementById('modalCancelBtn').onclick = () => finish(null);
+    document.getElementById('modalOkBtn').onclick = () => finish(input.value);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(input.value); });
+  });
+}
+
+/* ===================== View switching ===================== */
+document.querySelectorAll('.view-tab').forEach(tab => {
+  tab.onclick = () => { state.view = tab.dataset.v; renderView(); };
+});
+function renderView() {
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.v === state.view));
+  document.getElementById('dashboardView').style.display = state.view === 'dashboard' ? '' : 'none';
+  document.getElementById('listView').style.display = state.view === 'list' ? '' : 'none';
+  document.getElementById('machineView').style.display = state.view === 'machine' ? '' : 'none';
+  document.getElementById('auditView').style.display = state.view === 'audit' ? '' : 'none';
+  if (state.view === 'dashboard') renderDashboard();
+  else if (state.view === 'list') renderList();
+  else if (state.view === 'machine') renderMachine();
+  else if (state.view === 'audit') renderAudit();
+}
+
+/* ===================== Dashboard ===================== */
+function renderDashboard() {
+  const data = getEffectiveData();
+  const totalItems = data.length;
+  const totalQty = data.reduce((s,d) => s + d.qty, 0);
+
+  const byStatus = {}; STATUS_ORDER.forEach(s => byStatus[s] = 0);
+  data.forEach(d => { byStatus[d.status] = (byStatus[d.status]||0) + d.qty; });
+
+  const byCenter = {};
+  data.forEach(d => { byCenter[d.center] = (byCenter[d.center]||0) + d.qty; });
+
+  const auditedIds = new Set(Object.keys(audits).map(k => parseInt(k)));
+  const currentIds = new Set(data.map(d => d.id));
+  const auditedCount = [...auditedIds].filter(id => currentIds.has(id)).length;
+  const auditPct = totalItems ? Math.round(auditedCount / totalItems * 100) : 0;
+
+  const mismatches = data.filter(d => { const a = audits[d.id]; return a && a.checkedQty !== d.qty; });
+
+  const dash = document.getElementById('dashboardView');
+  dash.innerHTML = `
+    <div class="dash">
+      <div class="dash-hero">
+        <div class="dash-hero-label">전체 비품 현황</div>
+        <div class="dash-hero-row">
+          <div class="dash-hero-stat clickable" id="heroGoList"><div class="num">${totalItems}</div><div class="lbl">품목 (SKU) →</div></div>
+          <div class="dash-hero-stat" style="text-align:right;"><div class="num">${totalQty.toLocaleString()}</div><div class="lbl">총 수량(개)</div></div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        ${getSortedCenters(data).map(c => `
+        <div class="dash-card clickable" data-center="${escapeAttr(c)}">
+          <div class="dash-card-label">${escapeHtml(c)}</div>
+          <div class="dash-card-value">${(byCenter[c]||0).toLocaleString()}개</div>
+          <div class="dash-card-sub">${data.filter(d=>d.center===c).length}개 품목 →</div>
+        </div>`).join('')}
+      </div>
+
+      <div class="section-title">상태별 수량 <span style="font-weight:500;color:var(--ink-dim);">· 눌러서 해당 목록 보기</span></div>
+      <div class="dash-card">
+        ${STATUS_ORDER.map(s => {
+          const pct = totalQty ? (byStatus[s]/totalQty*100) : 0;
+          return `<div class="bar-row clickable" data-status="${s}">
+            <div class="bar-label" style="color:${STATUS_COLOR[s]}">${s}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${STATUS_COLOR[s]}"></div></div>
+            <div class="bar-val">${byStatus[s].toLocaleString()}개</div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="section-title-row">
+        <div class="section-title">PM3 보유 현황</div>
+        ${state.editUnlocked ? `<button class="mini-add-btn" id="scannerAddBtn">+ 추가</button>` : ''}
+      </div>
+      <div class="scanner-list" id="scannerList"></div>
+    </div>
+  `;
+
+  renderScannerList();
+  const scanAddBtn = document.getElementById('scannerAddBtn');
+  if (scanAddBtn) scanAddBtn.onclick = () => openScannerEdit(null);
+
+  document.getElementById('heroGoList').onclick = () => { state.list.center = '전체'; state.list.status = 'all'; state.list.query = ''; state.view = 'list'; renderView(); };
+  dash.querySelectorAll('[data-center]').forEach(el => {
+    el.onclick = () => {
+      state.list.center = el.dataset.center; state.list.status = 'all'; state.list.query = '';
+      state.view = 'list'; renderView();
+    };
+  });
+  dash.querySelectorAll('[data-status]').forEach(el => {
+    el.onclick = () => {
+      state.list.status = el.dataset.status; state.list.center = '전체'; state.list.query = '';
+      state.view = 'list'; renderView();
+    };
+  });
+}
+
+/* ===================== PM3 보유 현황 (센터·보관장소별 보유/사용/미사용) ===================== */
+function renderScannerList() {
+  const listEl = document.getElementById('scannerList');
+  if (!listEl) return;
+  const entries = Object.values(scanners);
+  if (entries.length === 0) {
+    listEl.innerHTML = '<div class="empty-activity">등록된 데이터가 없습니다.</div>';
+    return;
+  }
+  const centers = getSortedCenters(entries);
+  const totalsByCenter = {};
+  centers.forEach(c => {
+    totalsByCenter[c] = entries.filter(s => s.center === c).reduce((acc, s) => {
+      acc.have += s.have || 0; acc.inUse += s.inUse || 0; acc.unused += s.unused || 0;
+      return acc;
+    }, { have: 0, inUse: 0, unused: 0 });
+  });
+
+  listEl.innerHTML = `<div class="pm3-columns">${centers.map(c => {
+    const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c).sort((a,b) => a[1].zone.localeCompare(b[1].zone, 'ko'));
+    const t = totalsByCenter[c];
+    return `
+    <div class="pm3-col">
+      <div class="pm3-col-title">${escapeHtml(c)}</div>
+      <div class="pm3-col-total">보유 ${t.have} · 사용 ${t.inUse} · 미사용 ${t.unused}</div>
+      ${rows.map(([sid, s]) => `
+        <div class="pm3-col-row" ${state.editUnlocked ? `data-scan-edit="${sid}"` : ''}>
+          <div class="pm3-zone">${escapeHtml(s.zone)}</div>
+          <div class="pm3-nums">보유${s.have||0}·사용${s.inUse||0}·미사용${s.unused||0}</div>
+        </div>
+      `).join('')}
+    </div>`;
+  }).join('')}</div>`;
+
+  if (state.editUnlocked) {
+    listEl.querySelectorAll('[data-scan-edit]').forEach(el => {
+      el.onclick = () => openScannerEdit(el.dataset.scanEdit);
+    });
+  }
+}
+
+function openScannerEdit(sid) {
+  const isNew = !sid;
+  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', zone: '', have: 0, inUse: 0, unused: 0 } : scanners[sid];
+  sheetPanel.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-top"><div class="sheet-title">${isNew ? '보관장소 추가' : 'PM3 보유 정보 수정'}</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
+    <div class="form-row2">
+      <div class="form-field"><label class="form-label">센터</label>
+        <input class="form-input" id="scanCenterInput" value="${escapeAttr(rec.center)}" list="centerOptionsList2">
+        <datalist id="centerOptionsList2">${getSortedCenters(getEffectiveData()).map(c => `<option value="${escapeAttr(c)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field"><label class="form-label">구역/보관장소</label><input class="form-input" id="scanZoneInput" value="${escapeAttr(rec.zone)}"></div>
+    </div>
+    <div class="form-field"><label class="form-label">보유 수량</label><input type="number" class="form-input" id="scanHaveInput" value="${rec.have||0}" min="0"></div>
+    <div class="form-field"><label class="form-label">사용 수량</label><input type="number" class="form-input" id="scanInUseInput" value="${rec.inUse||0}" min="0"></div>
+    <div class="form-field"><label class="form-label">미사용 수량</label><input type="number" class="form-input" id="scanUnusedInput" value="${rec.unused||0}" min="0"></div>
+    <div class="sheet-actions">
+      ${!isNew ? `<button class="sheet-btn secondary" id="scanDeleteBtn">삭제</button>` : `<button class="sheet-btn secondary" id="scanCancelBtn">취소</button>`}
+      <button class="sheet-btn primary" id="scanSaveBtn">저장</button>
+    </div>
+  `;
+  document.getElementById('sheetCloseBtn').onclick = () => { closeDetailScanner(); };
+  const cancelBtn = document.getElementById('scanCancelBtn');
+  if (cancelBtn) cancelBtn.onclick = closeDetailScanner;
+  const delBtn = document.getElementById('scanDeleteBtn');
+  if (delBtn) delBtn.onclick = async () => {
+    if (!(await customConfirm(`${rec.center} ${rec.zone} 기록을 삭제할까요?`))) return;
+    delete scanners[sid];
+    const ok = await safeSet('scanners', scanners);
+    if (!ok) { scanners[sid] = rec; await customAlert('저장소 오류로 삭제에 실패했습니다. 다시 시도해주세요.'); return; }
+    pushLog(`PM3 기록 삭제: ${rec.center} ${rec.zone}`);
+    showToast('삭제되었습니다');
+    closeDetailScanner();
+  };
+  document.getElementById('scanSaveBtn').onclick = async () => {
+    const center = document.getElementById('scanCenterInput').value.trim();
+    const zone = document.getElementById('scanZoneInput').value.trim();
+    if (!center || !zone) { await customAlert('센터와 구역/보관장소를 입력해주세요.'); return; }
+    const have = parseInt(document.getElementById('scanHaveInput').value) || 0;
+    const inUse = parseInt(document.getElementById('scanInUseInput').value) || 0;
+    const unused = parseInt(document.getElementById('scanUnusedInput').value) || 0;
+    const id = isNew ? 'sc' + (nextScannerId++) : sid;
+    const prevVal = scanners[id];
+    scanners[id] = { center, zone, have, inUse, unused, updatedAt: new Date().toISOString() };
+    const ok = await safeSet('scanners', scanners);
+    if (!ok) {
+      if (prevVal) scanners[id] = prevVal; else delete scanners[id];
+      await customAlert('저장소 오류로 저장에 실패했습니다. 다시 시도해주세요.');
+      return;
+    }
+    pushLog(`${isNew ? 'PM3 등록' : 'PM3 정보 수정'}: ${center} ${zone} — 보유${have}·사용${inUse}·미사용${unused}`);
+    showToast('저장되었습니다');
+    closeDetailScanner();
+  };
+  sheetOverlay.classList.add('open');
+}
+function closeDetailScanner() {
+  sheetOverlay.classList.remove('open');
+  if (state.view === 'dashboard') renderDashboard();
+}
+
+function formatRelTime(iso) {
+  const d = new Date(iso);
+  const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+  if (diffMin < 1) return '방금 전';
+  if (diffMin < 60) return diffMin + '분 전';
+  const diffH = Math.round(diffMin/60);
+  if (diffH < 24) return diffH + '시간 전';
+  const diffD = Math.round(diffH/24);
+  if (diffD < 7) return diffD + '일 전';
+  return d.toLocaleDateString('ko-KR');
+}
+
+/* ===================== Shared zone-group rendering ===================== */
+function zoneSortKey(za, zb) {
+  if (za.center !== zb.center) return za.center.localeCompare(zb.center, 'ko');
+  const aFlag = za.zone === '위치 미상' ? 2 : (za.zone.includes('불량') || za.zone.includes('폐기')) ? 1 : 0;
+  const bFlag = zb.zone === '위치 미상' ? 2 : (zb.zone.includes('불량') || zb.zone.includes('폐기')) ? 1 : 0;
+  if (aFlag !== bFlag) return aFlag - bFlag;
+  return za.zone.localeCompare(zb.zone, 'ko');
+}
+
+function renderZoneGroups(containerEl, filtered, collapsedSet, showCenterBadge, auditMode, onZoneToggle) {
+  if (filtered.length === 0) {
+    containerEl.innerHTML = '<div class="empty-state">해당하는 품목이 없습니다.</div>';
+    return;
+  }
+  const byZone = {};
+  filtered.forEach(d => {
+    const key = d.center + '|' + d.zone;
+    if (!byZone[key]) byZone[key] = { center: d.center, zone: d.zone, items: [] };
+    byZone[key].items.push(d);
+  });
+  const zoneKeys = Object.keys(byZone).sort((a,b) => zoneSortKey(byZone[a], byZone[b]));
+
+  containerEl.innerHTML = '';
+  zoneKeys.forEach(key => {
+    const { center, zone, items } = byZone[key];
+    const qtySum = items.reduce((s,d) => s + d.qty, 0);
+    const isCollapsed = collapsedSet.has(key);
+
+    const group = document.createElement('div');
+    group.className = 'zone-group' + (isCollapsed ? ' collapsed' : '');
+
+    const centerBadgeHtml = showCenterBadge
+      ? `<span class="center-badge ${centerBadgeClass(center)}">${center}</span>` : '';
+
+    const header = document.createElement('div');
+    header.className = 'zone-header';
+    header.innerHTML = `
+      <div class="zone-title">${centerBadgeHtml}<span class="zone-pin"></span>${zone}</div>
+      <div class="zone-meta">${items.length}건 · ${qtySum}개
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>`;
+    header.onclick = () => { onZoneToggle(key); };
+    group.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'item-list';
+    items.sort((a,b) => a.category.localeCompare(b.category,'ko') || a.item.localeCompare(b.item,'ko'));
+
+    items.forEach(d => {
+      const audit = getAudit(d.id);
+      const pendingReq = getPendingRequests(d.id);
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      row.innerHTML = `
+        <div class="item-info">
+          <div class="item-name">${escapeHtml(d.item)}</div>
+          ${d.model ? `<div class="item-model">${escapeHtml(d.model)}</div>` : ''}
+          <div>
+          ${d.note ? `<span class="item-note-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>특이사항</span>` : ''}
+          ${pendingReq.length ? `<span class="request-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${pendingReq.length > 1 ? pendingReq.length + '건 요청' : pendingReq[0].type}</span>` : ''}
+          ${audit ? `<span class="audited-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>실사완료${audit.checkedQty !== d.qty ? ' (불일치)' : ''}</span>` : ''}
+          </div>
+        </div>
+        <div class="item-right">
+          <div class="qty">${d.qty}<span style="font-size:11px;font-weight:600;color:var(--ink-dim)">개</span></div>
+          <div class="status-badge ${d.status}">${d.status}</div>
+        </div>
+        ${auditMode ? `<button class="quick-check-btn" data-quickcheck="${d.id}" title="수량 일치로 실사 확인">✓</button>` : ''}
+      `;
+      row.onclick = (e) => {
+        if (e.target.closest('[data-quickcheck]')) return;
+        openDetail(d.id, auditMode);
+      };
+      list.appendChild(row);
+    });
+
+    group.appendChild(list);
+    containerEl.appendChild(group);
+  });
+
+  if (auditMode) {
+    containerEl.querySelectorAll('[data-quickcheck]').forEach(btn => {
+      btn.onclick = (e) => { e.stopPropagation(); quickAudit(parseInt(btn.dataset.quickcheck)); };
+    });
+  }
+}
+
+/* ===================== List / Machine / Audit views ===================== */
+function centerBadgeClass(c) {
+  if (c === '1센터') return 'c1';
+  if (c === '2센터') return 'c2';
+  return 'c3';
+}
+
+function centerRank(c) {
+  if (c === '관리부') return -1;
+  const m = String(c).match(/^(\d+)\s*센터/);
+  if (m) return parseInt(m[1]);
+  return 999;
+}
+function getSortedCenters(data) {
+  const set = new Set(data.map(d => d.center).filter(Boolean));
+  return [...set].sort((a,b) => centerRank(a) - centerRank(b) || a.localeCompare(b, 'ko'));
+}
+function buildCenterTabs(containerEl, data, sub, onPick) {
+  const centers = ['전체', ...getSortedCenters(data)];
+  containerEl.innerHTML = '';
+  centers.forEach(c => {
+    const btn = document.createElement('div');
+    btn.className = 'center-tab' + (c === sub.center ? ' active' : '');
+    btn.dataset.c = c; btn.textContent = c;
+    btn.onclick = () => { sub.center = c; sub.collapsed.clear(); onPick(); };
+    containerEl.appendChild(btn);
+  });
+}
+const MACHINE_SOURCE = '기계목록';
+
+function matchesFilter(d, sub, scope) {
+  if (scope === 'nonMachine' && d.source === MACHINE_SOURCE) return false;
+  if (scope === 'machine' && d.source !== MACHINE_SOURCE) return false;
+  if (sub.center !== '전체' && d.center !== sub.center) return false;
+  if (sub.status && sub.status !== 'all' && d.status !== sub.status) return false;
+  if (sub.query) {
+    const hay = (d.item + ' ' + d.model + ' ' + d.zone + ' ' + d.category + ' ' + d.subcategory).toLowerCase();
+    if (!hay.includes(sub.query)) return false;
+  }
+  return true;
+}
+
+/* ---- 재고 목록 ---- */
+const centerTabsEl = document.getElementById('centerTabs');
+const statusFiltersEl = document.getElementById('statusFilters');
+const searchInput = document.getElementById('searchInput');
+const clearBtn = document.getElementById('clearBtn');
+const summaryBar = document.getElementById('summaryBar');
+const mainContent = document.getElementById('mainContent');
+
+const statusOptions = [{key:'all', label:'전체'}, ...STATUS_ORDER.map(s => ({key:s, label:s}))];
+statusOptions.forEach(opt => {
+  const chip = document.createElement('div');
+  chip.className = 'status-chip'; chip.dataset.s = opt.key; chip.textContent = opt.label;
+  chip.onclick = () => { state.list.status = opt.key; renderList(); };
+  statusFiltersEl.appendChild(chip);
+});
+searchInput.addEventListener('input', (e) => {
+  state.list.query = e.target.value.trim().toLowerCase();
+  clearBtn.style.display = state.list.query ? 'block' : 'none';
+  renderList();
+});
+clearBtn.onclick = () => { searchInput.value = ''; state.list.query = ''; clearBtn.style.display = 'none'; renderList(); };
+
+function renderList() {
+  const sub = state.list;
+  searchInput.value = sub.query;
+  clearBtn.style.display = sub.query ? 'block' : 'none';
+  const allData = getEffectiveData();
+  buildCenterTabs(centerTabsEl, allData.filter(d => d.source !== MACHINE_SOURCE), sub, renderList);
+  document.querySelectorAll('#statusFilters .status-chip').forEach(el => el.classList.toggle('active', el.dataset.s === sub.status));
+
+  const filtered = allData.filter(d => matchesFilter(d, sub, 'nonMachine'));
+  const totalQty = filtered.reduce((s,d) => s + d.qty, 0);
+  const zoneCount = new Set(filtered.map(d => d.center + '|' + d.zone)).size;
+  const centerLabel = sub.center === '전체' ? '전체 센터' : sub.center;
+  summaryBar.innerHTML = `<span>${centerLabel} · ${zoneCount}개 구역</span><span><b>${filtered.length}</b>건 · <b>${totalQty}</b>개</span>`;
+
+  renderZoneGroups(mainContent, filtered, sub.collapsed, sub.center === '전체', false, (key) => {
+    if (sub.collapsed.has(key)) sub.collapsed.delete(key); else sub.collapsed.add(key);
+    renderList();
+  });
+}
+
+/* ---- 기계목록 ---- */
+const machineCenterTabsEl = document.getElementById('machineCenterTabs');
+const machineStatusFiltersEl = document.getElementById('machineStatusFilters');
+const machineSearchInput = document.getElementById('machineSearchInput');
+const machineClearBtn = document.getElementById('machineClearBtn');
+const machineSummaryBar = document.getElementById('machineSummaryBar');
+const machineMainContent = document.getElementById('machineMainContent');
+
+statusOptions.forEach(opt => {
+  const chip = document.createElement('div');
+  chip.className = 'status-chip'; chip.dataset.s = opt.key; chip.textContent = opt.label;
+  chip.onclick = () => { state.machine.status = opt.key; renderMachine(); };
+  machineStatusFiltersEl.appendChild(chip);
+});
+machineSearchInput.addEventListener('input', (e) => {
+  state.machine.query = e.target.value.trim().toLowerCase();
+  machineClearBtn.style.display = state.machine.query ? 'block' : 'none';
+  renderMachine();
+});
+machineClearBtn.onclick = () => { machineSearchInput.value = ''; state.machine.query = ''; machineClearBtn.style.display = 'none'; renderMachine(); };
+
+function renderMachine() {
+  const sub = state.machine;
+  machineSearchInput.value = sub.query;
+  machineClearBtn.style.display = sub.query ? 'block' : 'none';
+  const allData = getEffectiveData();
+  const machineData = allData.filter(d => d.source === MACHINE_SOURCE);
+  buildCenterTabs(machineCenterTabsEl, machineData, sub, renderMachine);
+  document.querySelectorAll('#machineStatusFilters .status-chip').forEach(el => el.classList.toggle('active', el.dataset.s === sub.status));
+
+  const filtered = allData.filter(d => matchesFilter(d, sub, 'machine'));
+  const totalQty = filtered.reduce((s,d) => s + d.qty, 0);
+  const zoneCount = new Set(filtered.map(d => d.center + '|' + d.zone)).size;
+  const centerLabel = sub.center === '전체' ? '전체 센터' : sub.center;
+  machineSummaryBar.innerHTML = `<span>${centerLabel} · ${zoneCount}개 구역</span><span><b>${filtered.length}</b>건 · <b>${totalQty}</b>개</span>`;
+
+  if (machineData.length === 0) {
+    machineMainContent.innerHTML = '<div class="empty-state">기계목록 탭에서 동기화된 데이터가 없습니다. 관리자 탭에서 구글시트를 연동해주세요.</div>';
+    return;
+  }
+
+  renderZoneGroups(machineMainContent, filtered, sub.collapsed, sub.center === '전체', false, (key) => {
+    if (sub.collapsed.has(key)) sub.collapsed.delete(key); else sub.collapsed.add(key);
+    renderMachine();
+  });
+}
+
+/* ---- 관리자(실사) ---- */
+const auditCenterTabsEl = document.getElementById('auditCenterTabs');
+const auditSearchInput = document.getElementById('auditSearchInput');
+const auditClearBtn = document.getElementById('auditClearBtn');
+const auditSummaryBar = document.getElementById('auditSummaryBar');
+const auditMainContent = document.getElementById('auditMainContent');
+const onlyUnauditedBtn = document.getElementById('onlyUnauditedBtn');
+const auditOverallCard = document.getElementById('auditOverallCard');
+
+auditSearchInput.addEventListener('input', (e) => {
+  state.audit.query = e.target.value.trim().toLowerCase();
+  auditClearBtn.style.display = state.audit.query ? 'block' : 'none';
+  renderAudit();
+});
+auditClearBtn.onclick = () => { auditSearchInput.value = ''; state.audit.query = ''; auditClearBtn.style.display = 'none'; renderAudit(); };
+onlyUnauditedBtn.onclick = () => { state.audit.onlyUnaudited = !state.audit.onlyUnaudited; renderAudit(); };
+
+function renderAudit() {
+  renderGsheetCard();
+  const sub = state.audit;
+  auditSearchInput.value = sub.query;
+  auditClearBtn.style.display = sub.query ? 'block' : 'none';
+
+  const allData = getEffectiveData();
+  buildCenterTabs(auditCenterTabsEl, allData, sub, renderAudit);
+  onlyUnauditedBtn.classList.toggle('active', sub.onlyUnaudited);
+  onlyUnauditedBtn.textContent = sub.onlyUnaudited ? '미확인만 ✓' : '미확인만';
+
+  // overall dashboard-style progress card (not affected by filters below)
+  const totalItems = allData.length;
+  const auditedIds = new Set(Object.keys(audits).map(k => parseInt(k)));
+  const currentIds = new Set(allData.map(d => d.id));
+  const auditedCount = [...auditedIds].filter(id => currentIds.has(id)).length;
+  const overallPct = totalItems ? Math.round(auditedCount/totalItems*100) : 0;
+  const mismatches = allData.filter(d => { const a = audits[d.id]; return a && a.checkedQty !== d.qty; });
+  auditOverallCard.innerHTML = `
+    <div class="progress-top"><div class="t">전체 실사 진행률</div><div class="v">${auditedCount} / ${totalItems} · ${overallPct}%</div></div>
+    <div class="progress-track"><div class="progress-fill" style="width:${overallPct}%"></div></div>
+    ${mismatches.length > 0 ? `
+    <div class="mismatch-banner" id="mismatchBanner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      기록과 실사 결과가 다른 품목 ${mismatches.length}건
+    </div>` : ''}
+  `;
+  const mb = document.getElementById('mismatchBanner');
+  if (mb) mb.onclick = () => { state.audit.onlyUnaudited = false; state.audit.center = '전체'; state.audit.query = ''; renderAudit(); };
+
+  let filtered = allData.filter(d => matchesFilter(d, sub, 'all'));
+  const totalInScope = filtered.length;
+  const auditedInScope = filtered.filter(d => audits[d.id]).length;
+  if (sub.onlyUnaudited) filtered = filtered.filter(d => !audits[d.id]);
+
+  const totalQty = filtered.reduce((s,d) => s + d.qty, 0);
+  const zoneCount = new Set(filtered.map(d => d.center + '|' + d.zone)).size;
+  const centerLabel = sub.center === '전체' ? '전체 센터' : sub.center;
+  auditSummaryBar.innerHTML = `<span>${centerLabel} · ${zoneCount}개 구역 · ${auditedInScope}/${totalInScope} 확인</span><span><b>${filtered.length}</b>건 · <b>${totalQty}</b>개</span>`;
+
+  if (filtered.length === 0 && sub.onlyUnaudited && totalInScope > 0) {
+    auditMainContent.innerHTML = '<div class="empty-state">이 범위의 품목은 모두 실사 확인되었습니다 🎉</div>';
+    return;
+  }
+
+  renderZoneGroups(auditMainContent, filtered, sub.collapsed, sub.center === '전체', true, (key) => {
+    if (sub.collapsed.has(key)) sub.collapsed.delete(key); else sub.collapsed.add(key);
+    renderAudit();
+  });
+}
+
+/* ===================== Audit actions ===================== */
+function quickAudit(id) {
+  const d = getEffectiveData().find(x => x.id === id);
+  if (!d) return;
+  audits[id] = { checkedAt: new Date().toISOString(), checkedQty: d.qty, matched: true, note: '' };
+  safeSet('audits', audits);
+  pushLog(`실사 확인: ${d.item} (${d.zone}) — ${d.qty}개, 일치`);
+  if (state.view === 'audit') renderAudit();
+  showToast('실사 확인되었습니다');
+}
+
+/* ===================== Detail sheet ===================== */
+const sheetOverlay = document.getElementById('sheetOverlay');
+const sheetPanel = document.getElementById('sheetPanel');
+
+function openDetail(id, fromAudit) {
+  const d = getEffectiveData().find(x => x.id === id);
+  if (!d) return;
+  renderViewSheet(d, !!fromAudit);
+  sheetOverlay.classList.add('open');
+}
+function closeDetail() {
+  sheetOverlay.classList.remove('open');
+  if (state.view === 'list') renderList();
+  else if (state.view === 'machine') renderMachine();
+  else if (state.view === 'audit') renderAudit();
+  else renderDashboard();
+}
+sheetOverlay.addEventListener('click', (e) => { if (e.target === sheetOverlay) closeDetail(); });
+
+function renderViewSheet(d, inAuditContext) {
+  const audit = getAudit(d.id);
+  const mismatch = audit && audit.checkedQty !== d.qty;
+  const allReq = getAllRequests(d.id);
+  sheetPanel.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-top">
+      <div class="sheet-title">${escapeHtml(d.item)}</div>
+      <button class="sheet-close" id="sheetCloseBtn">✕</button>
+    </div>
+    ${d.model ? `<div class="sheet-model">${escapeHtml(d.model)}</div>` : ''}
+    <div class="sheet-badges">
+      <span class="center-badge ${centerBadgeClass(d.center)}">${d.center}</span>
+      <span class="sheet-loc-badge">${escapeHtml(d.zone)}</span>
+      <span class="sheet-loc-badge">${escapeHtml(d.category)}${d.subcategory && d.subcategory !== d.category ? ' · ' + escapeHtml(d.subcategory) : ''}</span>
+    </div>
+    <div class="sheet-grid">
+      <div class="sheet-stat"><div class="sheet-stat-label">수량</div><div class="sheet-stat-value">${d.qty}개</div></div>
+      <div class="sheet-stat"><div class="sheet-stat-label">상태</div><div class="sheet-stat-value"><span class="status-badge ${d.status}" style="font-size:12px;">${d.status}</span></div></div>
+    </div>
+    ${d.note ? `
+    <div class="sheet-note-box">
+      <div class="sheet-note-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>특이사항</div>
+      <div class="sheet-note-text">${escapeHtml(d.note)}</div>
+    </div>` : ''}
+    ${(d.contact || d.rentalFee || d.rentalStart || d.rentalEnd || d.terminationCondition) ? `
+    <div class="sheet-note-box" style="background:var(--bg);">
+      <div class="sheet-note-label" style="color:var(--ink-dim);"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>렌탈/계약 정보</div>
+      <div class="sheet-note-text">
+        ${d.contact ? `연락처: ${escapeHtml(d.contact)}<br>` : ''}
+        ${d.rentalFee ? `월렌탈료: ${escapeHtml(d.rentalFee)}<br>` : ''}
+        ${d.rentalStart ? `운용 시작: ${escapeHtml(d.rentalStart)}<br>` : ''}
+        ${d.rentalEnd ? `렌탈 종료: ${escapeHtml(d.rentalEnd)}<br>` : ''}
+        ${d.terminationCondition ? `종료 조건: ${escapeHtml(d.terminationCondition)}` : ''}
+      </div>
+    </div>` : ''}
+    ${inAuditContext && audit ? `
+    <div class="sheet-audit-box ${mismatch ? 'mismatch' : ''}">
+      <div class="sheet-audit-label"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>실사 기록</div>
+      <div class="sheet-audit-text">${formatRelTime(audit.checkedAt)} 확인 · 실사수량 ${audit.checkedQty}개 ${mismatch ? `<b>(기록 ${d.qty}개와 다름)</b>` : '(기록과 일치)'}${audit.note ? '<br>메모: ' + escapeHtml(audit.note) : ''}</div>
+    </div>` : ''}
+    ${allReq.length ? `
+    <div class="sheet-note-box" style="background:var(--bad-bg);border-color:#F0CBAE;">
+      <div class="sheet-note-label" style="color:var(--bad);"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>요청 내역</div>
+      ${allReq.map(r => `
+        <div class="sheet-note-text" style="${r.status==='resolved' ? 'opacity:.55;text-decoration:line-through;' : ''} margin-bottom:8px;">
+          <b>${escapeHtml(r.type)}</b>${r.status==='resolved' ? ' · 처리완료' : ''} · ${formatRelTime(r.requestedAt)}
+          ${r.note ? '<br>' + escapeHtml(r.note) : ''}
+        </div>
+        ${state.editUnlocked && r.status==='pending' ? `<button class="sheet-btn secondary" style="margin-bottom:8px;padding:7px;font-size:12px;" data-resolve="${r.rid}">이 요청 처리완료</button>` : ''}
+      `).join('')}
+    </div>` : ''}
+    <div class="sheet-source">출처: ${escapeHtml(d.source || (d.id >= 100000 ? '수동 추가/업로드' : ''))}</div>
+    <div class="sheet-actions">
+      ${inAuditContext ? `<button class="sheet-btn audit" id="sheetAuditBtn">실사 확인</button>` : `<button class="sheet-btn audit" id="sheetRequestBtn">확인/불량/A·S 요청</button>`}
+      ${state.editUnlocked ? `<button class="sheet-btn primary" id="sheetEditBtn">수정</button>` : ''}
+    </div>
+  `;
+  document.getElementById('sheetCloseBtn').onclick = closeDetail;
+  const auditBtn = document.getElementById('sheetAuditBtn');
+  if (auditBtn) auditBtn.onclick = () => renderAuditSheet(d);
+  const reqBtn = document.getElementById('sheetRequestBtn');
+  if (reqBtn) reqBtn.onclick = () => renderRequestSheet(d, inAuditContext);
+  const editBtn = document.getElementById('sheetEditBtn');
+  if (editBtn) editBtn.onclick = () => renderEditSheet(d, inAuditContext);
+  sheetPanel.querySelectorAll('[data-resolve]').forEach(btn => {
+    btn.onclick = () => {
+      const rid = btn.dataset.resolve;
+      requests[rid].status = 'resolved';
+      requests[rid].resolvedAt = new Date().toISOString();
+      safeSet('requests', requests);
+      pushLog(`요청 처리완료: ${d.item} (${d.zone}) — ${requests[rid].type}`);
+      showToast('처리완료로 표시했습니다');
+      renderViewSheet(d, inAuditContext);
+    };
+  });
+}
+
+function renderRequestSheet(d, inAuditContext) {
+  sheetPanel.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-top"><div class="sheet-title">확인/불량/A·S 요청</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
+    <div class="sheet-model">${escapeHtml(d.item)} · ${escapeHtml(d.zone)}</div>
+    <div class="form-field">
+      <label class="form-label">요청 유형</label>
+      <select class="form-select" id="reqTypeInput">${REQUEST_TYPES.map(t => `<option>${t}</option>`).join('')}</select>
+    </div>
+    <div class="form-field">
+      <label class="form-label">내용 (선택)</label>
+      <textarea class="form-textarea" id="reqNoteInput" placeholder="예: 작동이 안 됨, 파손 부위 확인 필요 등"></textarea>
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-btn secondary" id="reqCancelBtn">취소</button>
+      <button class="sheet-btn primary" id="reqSaveBtn">요청 보내기</button>
+    </div>
+  `;
+  document.getElementById('sheetCloseBtn').onclick = closeDetail;
+  document.getElementById('reqCancelBtn').onclick = () => renderViewSheet(d, inAuditContext);
+  document.getElementById('reqSaveBtn').onclick = () => {
+    const type = document.getElementById('reqTypeInput').value;
+    const note = document.getElementById('reqNoteInput').value.trim();
+    const rid = 'req' + (nextReqId++);
+    requests[rid] = { itemId: d.id, type, note, requestedAt: new Date().toISOString(), status: 'pending' };
+    safeSet('requests', requests);
+    pushLog(`${type}: ${d.item} (${d.zone})${note ? ' — ' + note : ''}`);
+    showToast('요청이 접수되었습니다');
+    renderViewSheet(d, inAuditContext);
+  };
+}
+
+function renderAuditSheet(d) {
+  sheetPanel.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-top"><div class="sheet-title">실사 확인</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
+    <div class="sheet-model">${escapeHtml(d.item)} · ${escapeHtml(d.zone)}</div>
+    <div class="form-field">
+      <label class="form-label">실제 확인한 수량</label>
+      <input type="number" class="form-input" id="auditQtyInput" value="${d.qty}" min="0">
+    </div>
+    <div class="form-field">
+      <label class="form-label">상태 지정</label>
+      <select class="form-select" id="auditStatusInput">${STATUS_ORDER.map(s => `<option ${s===d.status?'selected':''}>${s}</option>`).join('')}</select>
+    </div>
+    <div class="form-field">
+      <label class="form-label">메모 (선택)</label>
+      <textarea class="form-textarea" id="auditNoteInput" placeholder="예: 3구역에서 발견, 파손 확인 등"></textarea>
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-btn secondary" id="auditCancelBtn">취소</button>
+      <button class="sheet-btn primary" id="auditSaveBtn">실사 결과 저장</button>
+    </div>
+  `;
+  document.getElementById('sheetCloseBtn').onclick = closeDetail;
+  document.getElementById('auditCancelBtn').onclick = () => renderViewSheet(d, true);
+  document.getElementById('auditSaveBtn').onclick = async () => {
+    if (!state.editUnlocked) {
+      const ok = await requestUnlock();
+      if (!ok) return;
+    }
+    const qty = parseInt(document.getElementById('auditQtyInput').value) || 0;
+    const newStatus = document.getElementById('auditStatusInput').value;
+    const note = document.getElementById('auditNoteInput').value.trim();
+    const matched = qty === d.qty;
+
+    audits[d.id] = { checkedAt: new Date().toISOString(), checkedQty: qty, matched, note };
+    const okAudit = await safeSet('audits', audits);
+
+    const statusChanged = newStatus !== d.status;
+    let okOverride = true;
+    if (statusChanged) {
+      overrides[d.id] = { ...d, status: newStatus, updatedAt: new Date().toISOString() };
+      okOverride = await safeSet('overrides', overrides);
+    }
+    if (!okAudit || !okOverride) {
+      await customAlert('저장소 오류로 저장에 실패했습니다. 다시 시도해주세요.');
+      return;
+    }
+    pushLog(`실사 확인: ${d.item} (${d.zone}) — ${qty}개${matched ? ', 일치' : `, 기록(${d.qty}개)과 다름`}${statusChanged ? `, 상태 → ${newStatus}` : ''}`);
+    showToast(matched ? '실사 확인되었습니다' : '차이가 발견되어 기록되었습니다');
+    renderViewSheet({ ...d, status: newStatus }, true);
+  };
+}
+
+function renderEditSheet(d, inAuditContext) {
+  sheetPanel.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-top"><div class="sheet-title">품목 수정</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
+    <div class="form-field"><label class="form-label">품목명</label><input class="form-input" id="editItem" value="${escapeAttr(d.item)}"></div>
+    <div class="form-row2">
+      <div class="form-field"><label class="form-label">센터</label>
+        <input class="form-input" id="editCenter" value="${escapeAttr(d.center)}" list="centerOptionsList">
+        <datalist id="centerOptionsList">${getSortedCenters(getEffectiveData()).map(c => `<option value="${escapeAttr(c)}">`).join('')}</datalist>
+      </div>
+      <div class="form-field"><label class="form-label">구역</label><input class="form-input" id="editZone" value="${escapeAttr(d.zone)}"></div>
+    </div>
+    <div class="form-row2">
+      <div class="form-field"><label class="form-label">분류</label><input class="form-input" id="editCategory" value="${escapeAttr(d.category)}"></div>
+      <div class="form-field"><label class="form-label">소분류</label><input class="form-input" id="editSubcategory" value="${escapeAttr(d.subcategory)}"></div>
+    </div>
+    <div class="form-field"><label class="form-label">모델명</label><input class="form-input" id="editModel" value="${escapeAttr(d.model)}"></div>
+    <div class="form-row2">
+      <div class="form-field"><label class="form-label">수량</label><input type="number" class="form-input" id="editQty" value="${d.qty}" min="0"></div>
+      <div class="form-field"><label class="form-label">상태</label>
+        <select class="form-select" id="editStatus">${STATUS_ORDER.map(s=>`<option ${s===d.status?'selected':''}>${s}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="form-field"><label class="form-label">비고 / 특이사항</label><textarea class="form-textarea" id="editNote">${escapeHtml(d.note)}</textarea></div>
+    <div class="sheet-actions">
+      <button class="sheet-btn secondary" id="editCancelBtn">취소</button>
+      <button class="sheet-btn primary" id="editSaveBtn">저장</button>
+    </div>
+  `;
+  document.getElementById('sheetCloseBtn').onclick = closeDetail;
+  document.getElementById('editCancelBtn').onclick = () => renderViewSheet(d, inAuditContext);
+  document.getElementById('editSaveBtn').onclick = async () => {
+    const updated = {
+      center: document.getElementById('editCenter').value,
+      zone: document.getElementById('editZone').value.trim() || '위치 미상',
+      category: document.getElementById('editCategory').value.trim(),
+      subcategory: document.getElementById('editSubcategory').value.trim(),
+      item: document.getElementById('editItem').value.trim(),
+      model: document.getElementById('editModel').value.trim(),
+      status: document.getElementById('editStatus').value,
+      qty: parseInt(document.getElementById('editQty').value) || 0,
+      note: document.getElementById('editNote').value.trim(),
+      source: d.source,
+      updatedAt: new Date().toISOString(),
+    };
+    const prevVal = overrides[d.id];
+    overrides[d.id] = updated;
+    const ok = await safeSet('overrides', overrides);
+    if (!ok) {
+      if (prevVal) overrides[d.id] = prevVal; else delete overrides[d.id];
+      await customAlert('저장소 오류로 저장에 실패했습니다. 다시 시도해주세요.');
+      return;
+    }
+    pushLog(`수정: ${updated.item} (${updated.center} ${updated.zone}) — ${updated.qty}개 / ${updated.status}`);
+    showToast('수정되었습니다');
+    renderViewSheet({ ...updated, id: d.id }, inAuditContext);
+  };
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+function escapeAttr(str) { return escapeHtml(str).replace(/"/g,'&quot;'); }
+
+/* ===================== Excel export/import ===================== */
+function exportExcel() {
+  const data = getEffectiveData();
+  const rows = data.map(d => {
+    const a = getAudit(d.id);
+    return {
+      'ID': d.id, '센터': d.center, '구역/보관장소': d.zone, '분류': d.category, '소분류': d.subcategory,
+      '품목': d.item, '모델명': d.model, '상태': d.status, '수량': d.qty, '비고': d.note,
+      '최근실사일': a ? a.checkedAt.slice(0,10) : '', '실사수량': a ? a.checkedQty : '',
+      '실사일치여부': a ? (a.matched ? '일치' : '불일치') : '', '출처': d.source || '',
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:6},{wch:8},{wch:16},{wch:10},{wch:10},{wch:26},{wch:22},{wch:8},{wch:8},{wch:30},{wch:12},{wch:10},{wch:12},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '비품재고');
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  XLSX.writeFile(wb, `비품재고_${today}.xlsx`);
+  pushLog(`엑셀 내보내기: ${rows.length}건`);
+  showToast('엑셀 파일을 내보냈습니다');
+}
+
+document.getElementById('excelUploadInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    if (!rows.length) { await customAlert('업로드한 파일에서 데이터를 찾을 수 없습니다.'); return; }
+
+    if (!state.editUnlocked) {
+      const proceed = await customConfirm('일괄 업로드는 편집 잠금 해제가 필요합니다. PIN을 입력하시겠습니까?');
+      if (!proceed) { e.target.value = ''; return; }
+      const ok = await requestUnlock();
+      if (!ok) { e.target.value = ''; return; }
+    }
+
+    let updated = 0, added = 0;
+    rows.forEach(r => {
+      const idRaw = r['ID'];
+      const rec = {
+        center: String(r['센터']||'').trim(),
+        zone: String(r['구역/보관장소']||'').trim() || '위치 미상',
+        category: String(r['분류']||'').trim(),
+        subcategory: String(r['소분류']||'').trim(),
+        item: String(r['품목']||'').trim(),
+        model: String(r['모델명']||'').trim(),
+        status: STATUS_ORDER.includes(r['상태']) ? r['상태'] : '정상',
+        qty: parseInt(r['수량']) || 0,
+        note: String(r['비고']||'').trim(),
+        source: String(r['출처']||'') || '엑셀 업로드',
+        updatedAt: new Date().toISOString(),
+      };
+      if (!rec.item || !rec.center) return;
+      let id;
+      if (idRaw !== '' && idRaw !== undefined && idRaw !== null && !isNaN(parseInt(idRaw))) { id = parseInt(idRaw); updated++; }
+      else { id = nextNewId++; added++; }
+      overrides[id] = rec;
+    });
+    await safeSet('overrides', overrides);
+    pushLog(`엑셀 일괄 업로드: 수정 ${updated}건, 추가 ${added}건`);
+    showToast(`업로드 완료 — 수정 ${updated}건, 추가 ${added}건`);
+    renderView();
+  } catch (err) {
+    console.error(err);
+    await customAlert('파일을 읽는 중 오류가 발생했습니다. 내보내기한 양식과 동일한 파일인지 확인해주세요.');
+  } finally { e.target.value = ''; }
+});
+
+/* ===================== Google Sheet full sync (3 tabs, monthly bulk update) ===================== */
+const GSHEET_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '분류':'category', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
+const MACHINE_EXTRA_FIELD_MAP = { '연락처':'contact', '월렌탈료':'rentalFee', '운용 시작':'rentalStart', '렌탈 종료':'rentalEnd', '종료 조건':'terminationCondition' };
+const GSHEET_TABS = { biz: '비품전체내역_웹용백데이터', machine: '기계전체내역_웹용백데이터', pm3: 'PM3현황_웹용백데이터' };
+const PM3_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '보유':'have', '사용':'inUse', '미사용':'unused' };
+
+function renderGsheetCard() {
+  const card = document.getElementById('gsheetCard');
+  if (!card) return;
+  if (!settings.gsheetUrl) {
+    card.innerHTML = `
+      <div class="gsheet-top"><div class="gsheet-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>연동 안 됨</div></div>
+      <div class="gsheet-row">
+        <input class="gsheet-input" id="gsheetUrlInput" placeholder="구글시트 링크(주소창 URL)를 붙여넣으세요">
+        <button class="gsheet-btn" id="gsheetSaveBtn">연결</button>
+      </div>
+      <div class="gsheet-hint">구글시트 1개에 <b>비품전체내역_웹용백데이터 / 기계전체내역_웹용백데이터 / PM3현황_웹용백데이터</b> 탭 3개를 만드세요.<br><br>
+      "웹에 게시"는 <b>필요 없고</b>, 대신 오른쪽 상단 [공유] 버튼에서 <b>"링크가 있는 모든 사용자"를 "뷰어"로</b> 설정한 다음, 브라우저 주소창에 있는 구글시트 링크(예: docs.google.com/spreadsheets/d/…)를 그대로 붙여넣어 주세요.<br><br>
+      비품·기계 탭 헤더: 센터 / 구역/보관장소 / 분류 / 소분류 / 품목 / 모델명 / 상태 / 수량 / 비고 (기계 탭은 연락처 / 월렌탈료 / 운용 시작 / 렌탈 종료 / 종료 조건도 인식됩니다)<br>
+      PM3현황 탭 헤더: 센터 / 구역/보관장소 / 보유 / 사용 / 미사용<br><br>
+      ⚠️ 동기화하면 <b>시트에 있는 내용으로 전체 데이터가 교체</b>됩니다 — 시트에 없는 기존 품목·인원은 삭제 처리돼요. 시트에 현재 전체 목록을 다 채워두고 동기화하세요.</div>
+    `;
+    document.getElementById('gsheetSaveBtn').onclick = async () => {
+      const url = document.getElementById('gsheetUrlInput').value.trim();
+      if (!url) return;
+      if (!state.editUnlocked) { const ok = await requestUnlock(); if (!ok) return; }
+      settings.gsheetUrl = url;
+      await safeSet('settings', settings);
+      renderGsheetCard();
+      syncGoogleSheet(false);
+    };
+  } else {
+    const shortUrl = settings.gsheetUrl.length > 38 ? settings.gsheetUrl.slice(0,38) + '…' : settings.gsheetUrl;
+    card.innerHTML = `
+      <div class="gsheet-top">
+        <div class="gsheet-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>연동됨</div>
+        <div class="gsheet-status">${settings.gsheetLastSync ? '마지막 동기화: ' + formatRelTime(settings.gsheetLastSync) : '아직 동기화 안 함'}</div>
+      </div>
+      <div class="gsheet-hint" style="margin:0 0 8px;word-break:break-all;">${escapeHtml(shortUrl)}</div>
+      <div class="gsheet-synced-row">
+        <button class="gsheet-btn secondary" id="gsheetUnlinkBtn">연결 해제</button>
+        <button class="gsheet-btn" id="gsheetSyncNowBtn">지금 동기화</button>
+      </div>
+    `;
+    document.getElementById('gsheetSyncNowBtn').onclick = async () => {
+      if (!state.editUnlocked) { const ok = await requestUnlock(); if (!ok) return; }
+      if (!(await customConfirm('시트 내용으로 전체 데이터를 덮어씁니다. 시트에 없는 기존 품목·인원은 삭제 처리돼요. 계속할까요?'))) return;
+      syncGoogleSheet(false);
+    };
+    document.getElementById('gsheetUnlinkBtn').onclick = async () => {
+      if (!state.editUnlocked) { const ok = await requestUnlock(); if (!ok) return; }
+      if (!(await customConfirm('구글시트 연동을 해제할까요? (이미 가져온 데이터는 유지됩니다)'))) return;
+      delete settings.gsheetUrl;
+      delete settings.gsheetLastSync;
+      await safeSet('settings', settings);
+      renderGsheetCard();
+      showToast('연동이 해제되었습니다');
+    };
+  }
+}
+
+function extractSheetId(url) {
+  const m = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : null;
+}
+function gvizCsvUrl(sheetId, tabName) {
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+}
+
+async function fetchTabCsv(sheetId, tabName) {
+  const res = await fetch(gvizCsvUrl(sheetId, tabName), { cache: 'no-store' });
+  if (!res.ok) throw new Error(tabName + ': HTTP ' + res.status);
+  const text = await res.text();
+  // gviz returns an HTML error page (not CSV) if the tab name is wrong or the sheet isn't link-shared
+  if (/^\s*<!DOCTYPE html/i.test(text) || /<html/i.test(text.slice(0, 200))) return null;
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  return parsed.data;
+}
+
+async function syncGoogleSheet(silent) {
+  if (!settings.gsheetUrl || typeof Papa === 'undefined') return;
+  const btn = document.getElementById('gsheetSyncNowBtn');
+  if (btn) { btn.textContent = '동기화 중…'; btn.disabled = true; }
+  try {
+    const sheetId = extractSheetId(settings.gsheetUrl);
+    if (!sheetId) throw new Error('링크에서 시트 ID를 찾지 못했습니다.');
+
+    if (!gsheetSyncMap.biz) gsheetSyncMap.biz = {};
+    if (!gsheetSyncMap.machine) gsheetSyncMap.machine = {};
+    if (!gsheetSyncMap.pm3) gsheetSyncMap.pm3 = {};
+
+    let itemAdded = 0, itemUpdated = 0, itemRemoved = 0;
+    let scanAdded = 0, scanUpdated = 0, scanRemoved = 0;
+    const missingTabs = [];
+
+    // --- 비품 + 기계 → items ---
+    for (const tabKey of ['biz', 'machine']) {
+      const sheetName = GSHEET_TABS[tabKey];
+      const rows = await fetchTabCsv(sheetId, sheetName);
+      const seenKeys = new Set();
+      if (rows === null) {
+        missingTabs.push(sheetName);
+      } else {
+        rows.forEach((row, i) => {
+          const rec = { source: sheetName, updatedAt: new Date().toISOString() };
+          Object.keys(GSHEET_FIELD_MAP).forEach(kr => { rec[GSHEET_FIELD_MAP[kr]] = String(row[kr] || '').trim(); });
+          if (!rec.center || !rec.item) return;
+          rec.zone = rec.zone || '위치 미상';
+          rec.status = STATUS_ORDER.includes(rec.status) ? rec.status : '정상';
+          rec.qty = parseInt(rec.qty) || 1;
+          if (tabKey === 'machine') {
+            Object.keys(MACHINE_EXTRA_FIELD_MAP).forEach(kr => {
+              const v = String(row[kr] || '').trim();
+              if (v) rec[MACHINE_EXTRA_FIELD_MAP[kr]] = v;
+            });
+          }
+
+          const externalKey = 'g_' + tabKey + '_' + i;
+          seenKeys.add(externalKey);
+          let id = gsheetSyncMap[tabKey][externalKey];
+          if (id === undefined) { id = nextNewId++; gsheetSyncMap[tabKey][externalKey] = id; itemAdded++; }
+          else { itemUpdated++; }
+          overrides[id] = rec;
+        });
+      }
+      // only clean up stale entries if we actually got a successful read for this tab
+      if (rows !== null) {
+        Object.keys(gsheetSyncMap[tabKey]).forEach(key => {
+          if (!seenKeys.has(key)) {
+            const id = gsheetSyncMap[tabKey][key];
+            overrides[id] = { ...(overrides[id] || {}), deleted: true, updatedAt: new Date().toISOString() };
+            delete gsheetSyncMap[tabKey][key];
+            itemRemoved++;
+          }
+        });
+      }
+    }
+
+    // --- PM3현황 → 보관장소별 보유/사용/미사용 집계 ---
+    const pm3Rows = await fetchTabCsv(sheetId, GSHEET_TABS.pm3);
+    const seenPm3Keys = new Set();
+    if (pm3Rows === null) {
+      missingTabs.push(GSHEET_TABS.pm3);
+    } else {
+      pm3Rows.forEach((row, i) => {
+        const rec = {};
+        Object.keys(PM3_FIELD_MAP).forEach(kr => { rec[PM3_FIELD_MAP[kr]] = row[kr]; });
+        const center = String(rec.center || '').trim();
+        const zone = String(rec.zone || '').trim();
+        if (!center) return;
+        const have = parseInt(rec.have) || 0;
+        const inUse = parseInt(rec.inUse) || 0;
+        const unused = parseInt(rec.unused) || 0;
+        const externalKey = 'g_pm3_' + i;
+        seenPm3Keys.add(externalKey);
+        let id = gsheetSyncMap.pm3[externalKey];
+        if (id === undefined) { id = 'sc' + (nextScannerId++); gsheetSyncMap.pm3[externalKey] = id; scanAdded++; }
+        else { scanUpdated++; }
+        scanners[id] = { center, zone: zone || '전체', have, inUse, unused, updatedAt: new Date().toISOString() };
+      });
+      Object.keys(gsheetSyncMap.pm3).forEach(key => {
+        if (!seenPm3Keys.has(key)) {
+          delete scanners[gsheetSyncMap.pm3[key]];
+          delete gsheetSyncMap.pm3[key];
+          scanRemoved++;
+        }
+      });
+    }
+
+    await safeSet('overrides', overrides);
+    await safeSet('scanners', scanners);
+    await safeSet('gsheetSyncMap', gsheetSyncMap);
+    settings.gsheetLastSync = new Date().toISOString();
+    await safeSet('settings', settings);
+
+    if (missingTabs.length === 3) {
+      throw new Error('탭을 하나도 읽지 못했습니다. 시트가 "링크가 있는 모든 사용자" 보기 권한으로 공유되어 있는지 확인해주세요.');
+    }
+    const summary = `품목 추가 ${itemAdded}·수정 ${itemUpdated}·삭제 ${itemRemoved}건, PM3 추가 ${scanAdded}·수정 ${scanUpdated}·삭제 ${scanRemoved}건`;
+    pushLog(`구글시트 전체 동기화: ${summary}${missingTabs.length ? ` (탭 못 읽음: ${missingTabs.join(', ')})` : ''}`);
+    if (missingTabs.length) {
+      await customAlert(`동기화는 됐지만 일부 탭을 읽지 못했습니다: ${missingTabs.join(', ')}\n탭 이름이 정확한지 확인해주세요.`);
+    } else if (!silent) {
+      showToast('동기화 완료 — ' + summary);
+    } else {
+      showToast('구글시트에서 자동 동기화되었습니다');
+    }
+    renderGsheetCard();
+    renderView();
+  } catch (err) {
+    console.error('gsheet sync failed', err);
+    if (!silent) await customAlert('구글시트를 불러오지 못했습니다. 시트가 "링크가 있는 모든 사용자 - 뷰어" 로 공유되어 있는지, 붙여넣은 링크가 시트 주소인지 확인해주세요.\n\n' + err.message);
+  } finally {
+    if (btn) { btn.textContent = '지금 동기화'; btn.disabled = false; }
+  }
+}
+
+/* ===================== Init ===================== */
+document.getElementById('lockBtn').onclick = handleLockClick;
+document.getElementById('xlExportBtn').onclick = exportExcel;
+document.getElementById('xlImportBtn').onclick = () => document.getElementById('excelUploadInput').click();
+
+(async function init() {
+  renderLockBtn();
+  await loadAll();
+  renderView();
+  // Note: full-replace sync (deletes items missing from the sheet) is not run
+  // automatically on load — only via the "지금 동기화" button, to avoid wiping
+  // data if the sheet happens to be mid-edit when someone opens the app.
+})();
+
+</script>
+</body>
+</html>
