@@ -579,7 +579,7 @@ function renderDashboard() {
       </div>
 
       <div class="section-title-row">
-        <div class="section-title">PM3 보유 현황</div>
+        <div class="section-title" id="pm3SectionTitle">PM3 보유 현황</div>
         ${state.editUnlocked ? `<button class="mini-add-btn" id="scannerAddBtn">+ 추가</button>` : ''}
       </div>
       <div class="scanner-list" id="scannerList"></div>
@@ -606,15 +606,27 @@ function renderDashboard() {
 }
 
 /* ===================== PM3 보유 현황 (센터별 · 사용자별) ===================== */
+function last4(serial) {
+  const s = String(serial || '').replace(/\s/g, '');
+  return s ? s.slice(-4) : '';
+}
+
 function renderScannerList() {
   const listEl = document.getElementById('scannerList');
+  const titleEl = document.getElementById('pm3SectionTitle');
   if (!listEl) return;
   const entries = Object.values(scanners);
   if (entries.length === 0) {
+    if (titleEl) titleEl.textContent = 'PM3 보유 현황';
     listEl.innerHTML = '<div class="empty-activity">등록된 데이터가 없습니다.</div>';
     return;
   }
-  const centers = getSortedCenters(entries);
+  const grandHave = entries.length;
+  const grandInUse = entries.filter(s => s.inUse).length;
+  const grandUnused = grandHave - grandInUse;
+  if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave}·사용 ${grandInUse}·미사용 ${grandUnused})`;
+
+  const centers = getSortedCenters(entries).sort((a,b) => pm3CenterRank(a) - pm3CenterRank(b));
   const totalsByCenter = {};
   centers.forEach(c => {
     const rows = entries.filter(s => s.center === c);
@@ -626,7 +638,8 @@ function renderScannerList() {
   });
 
   listEl.innerHTML = `<div class="pm3-columns">${centers.map(c => {
-    const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c).sort((a,b) => a[1].user.localeCompare(b[1].user, 'ko'));
+    const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c)
+      .sort((a,b) => (b[1].inUse - a[1].inUse) || a[1].user.localeCompare(b[1].user, 'ko'));
     const t = totalsByCenter[c];
     return `
     <div class="pm3-col">
@@ -635,7 +648,7 @@ function renderScannerList() {
       ${rows.map(([sid, s]) => `
         <div class="pm3-col-row" ${state.editUnlocked ? `data-scan-edit="${sid}"` : ''}>
           <div class="pm3-zone">${escapeHtml(s.user)}</div>
-          <div class="pm3-nums">${s.inUse ? '사용' : '미사용'}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
+          <div class="pm3-nums">${s.inUse ? '사용' : '미사용'}${last4(s.serial) ? ' · ' + escapeHtml(last4(s.serial)) : ''}</div>
         </div>
       `).join('')}
     </div>`;
@@ -1349,7 +1362,6 @@ document.getElementById('excelUploadInput').addEventListener('change', async (e)
 
 /* ===================== Google Sheet full sync (3 tabs, monthly bulk update) ===================== */
 const GSHEET_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '분류':'category', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
-const MACHINE_EXTRA_FIELD_MAP = { '연락처':'contact', '월렌탈료':'rentalFee', '운용 시작':'rentalStart', '렌탈 종료':'rentalEnd', '종료 조건':'terminationCondition' };
 const GSHEET_TABS = { biz: '비품전체내역_웹용백데이터_삭제금지', machine: '기계전체내역_웹용백데이터_삭제금지', pm3: 'PM3현황_웹용백데이터_삭제금지' };
 const PM3_FIELD_MAP = { '센터':'center', '사용자':'user', '사용여부':'inUseRaw', '시리얼번호':'serial', '특이사항':'note', '모델명':'model' };
 function parsePm3InUse(val) {
@@ -1358,6 +1370,21 @@ function parsePm3InUse(val) {
   if (s.includes('사용')) return true;
   return false;
 }
+const PM3_INVALID_USER_VALUES = ['미사용', '사용', '없음', '미배정', '공석', '-', 'x', 'X'];
+function isValidPm3User(name) {
+  const s = String(name || '').trim();
+  if (!s) return false;
+  if (PM3_INVALID_USER_VALUES.includes(s)) return false;
+  return true; // real names, and '공용', pass
+}
+function pm3CenterRank(c) {
+  const m = String(c).match(/^(\d+)\s*센터/);
+  if (m) return parseInt(m[1]);
+  if (c === '관리부') return 999;
+  return 1000;
+}
+
+const MACHINE_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
 
 function renderGsheetCard() {
   const card = document.getElementById('gsheetCard');
@@ -1447,34 +1474,32 @@ async function syncGoogleSheet(silent) {
     let itemAdded = 0, itemUpdated = 0, itemRemoved = 0;
     let scanAdded = 0, scanUpdated = 0, scanRemoved = 0;
     const missingTabs = [];
+    const perTabCounts = {};
 
-    // --- 비품 + 기계 → items ---
+    // --- 비품 + 기계 → items (각 탭은 각자 헤더 구성이 다름) ---
     for (const tabKey of ['biz', 'machine']) {
       const sheetName = GSHEET_TABS[tabKey];
+      const fieldMap = tabKey === 'machine' ? MACHINE_FIELD_MAP : GSHEET_FIELD_MAP;
       const rows = await fetchTabCsv(sheetId, sheetName);
       const seenKeys = new Set();
+      let added = 0, updated = 0, removed = 0;
       if (rows === null) {
         missingTabs.push(sheetName);
       } else {
         rows.forEach((row, i) => {
           const rec = { source: sheetName, updatedAt: new Date().toISOString() };
-          Object.keys(GSHEET_FIELD_MAP).forEach(kr => { rec[GSHEET_FIELD_MAP[kr]] = String(row[kr] || '').trim(); });
+          Object.keys(fieldMap).forEach(kr => { rec[fieldMap[kr]] = String(row[kr] || '').trim(); });
           if (!rec.center || !rec.item) return;
           rec.zone = rec.zone || '위치 미상';
           rec.status = STATUS_ORDER.includes(rec.status) ? rec.status : '정상';
           rec.qty = parseInt(rec.qty) || 1;
-          if (tabKey === 'machine') {
-            Object.keys(MACHINE_EXTRA_FIELD_MAP).forEach(kr => {
-              const v = String(row[kr] || '').trim();
-              if (v) rec[MACHINE_EXTRA_FIELD_MAP[kr]] = v;
-            });
-          }
+          if (tabKey === 'machine' && !rec.category) rec.category = rec.subcategory;
 
           const externalKey = 'g_' + tabKey + '_' + i;
           seenKeys.add(externalKey);
           let id = gsheetSyncMap[tabKey][externalKey];
-          if (id === undefined) { id = nextNewId++; gsheetSyncMap[tabKey][externalKey] = id; itemAdded++; }
-          else { itemUpdated++; }
+          if (id === undefined) { id = nextNewId++; gsheetSyncMap[tabKey][externalKey] = id; added++; }
+          else { updated++; }
           overrides[id] = rec;
         });
       }
@@ -1485,13 +1510,15 @@ async function syncGoogleSheet(silent) {
             const id = gsheetSyncMap[tabKey][key];
             overrides[id] = { ...(overrides[id] || {}), deleted: true, updatedAt: new Date().toISOString() };
             delete gsheetSyncMap[tabKey][key];
-            itemRemoved++;
+            removed++;
           }
         });
       }
+      perTabCounts[tabKey] = { added, updated, removed, found: rows !== null, rowCount: rows ? rows.length : 0 };
+      itemAdded += added; itemUpdated += updated; itemRemoved += removed;
     }
 
-    // --- PM3현황 → 사용자별 보유 현황 ---
+    // --- PM3현황 → 사용자별 보유 현황 (사용자가 실명 또는 '공용'인 행만 유효) ---
     const pm3Rows = await fetchTabCsv(sheetId, GSHEET_TABS.pm3);
     const seenPm3Keys = new Set();
     if (pm3Rows === null) {
@@ -1502,7 +1529,7 @@ async function syncGoogleSheet(silent) {
         Object.keys(PM3_FIELD_MAP).forEach(kr => { rec[PM3_FIELD_MAP[kr]] = row[kr]; });
         const center = String(rec.center || '').trim();
         const user = String(rec.user || '').trim();
-        if (!center || !user) return;
+        if (!center || !isValidPm3User(user)) return;
         const inUse = parsePm3InUse(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
@@ -1535,14 +1562,15 @@ async function syncGoogleSheet(silent) {
     if (missingTabs.length === 3) {
       throw new Error('탭을 하나도 읽지 못했습니다. 시트가 "링크가 있는 모든 사용자" 보기 권한으로 공유되어 있는지 확인해주세요.');
     }
-    const summary = `품목 추가 ${itemAdded}·수정 ${itemUpdated}·삭제 ${itemRemoved}건, PM3 추가 ${scanAdded}·수정 ${scanUpdated}·삭제 ${scanRemoved}건`;
-    pushLog(`구글시트 전체 동기화: ${summary}${missingTabs.length ? ` (탭 못 읽음: ${missingTabs.join(', ')})` : ''}`);
+    const bizC = perTabCounts.biz, machC = perTabCounts.machine;
+    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 추가${scanAdded}·수정${scanUpdated}·삭제${scanRemoved}`;
+    pushLog(`구글시트 전체 동기화: ${summary}`);
     if (missingTabs.length) {
-      await customAlert(`동기화는 됐지만 일부 탭을 읽지 못했습니다: ${missingTabs.join(', ')}\n탭 이름이 정확한지 확인해주세요.`);
+      await customAlert(`동기화 결과: ${summary}\n\n못 읽은 탭이 있습니다: ${missingTabs.join(', ')}\n탭 이름이 정확한지 확인해주세요.`);
     } else if (!silent) {
       showToast('동기화 완료 — ' + summary);
     } else {
-      showToast('구글시트에서 자동 동기화되었습니다');
+      showToast('구글시트에서 자동 동기화되었습니다 — ' + summary);
     }
     renderGsheetCard();
     renderView();
