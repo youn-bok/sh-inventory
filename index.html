@@ -624,9 +624,10 @@ function renderScannerList() {
   }
   const withSerial = entries.filter(s => s.serial);
   const grandHave = withSerial.length;
-  const grandInUse = withSerial.filter(s => s.inUse).length;
-  const grandUnused = grandHave - grandInUse;
-  if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave} · 사용 ${grandInUse} · 미사용 ${grandUnused})`;
+  const grandInUse = withSerial.filter(s => s.status === '사용').length;
+  const grandDiscarded = withSerial.filter(s => s.status === '폐기').length;
+  const grandUnused = grandHave - grandInUse - grandDiscarded;
+  if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave} · 사용 ${grandInUse} · 미사용 ${grandUnused} · 폐기 ${grandDiscarded})`;
 
   const centers = getSortedCenters(entries).sort((a,b) => pm3CenterRank(a) - pm3CenterRank(b));
   const totalsByCenter = {};
@@ -634,23 +635,25 @@ function renderScannerList() {
     const rows = entries.filter(s => s.center === c && s.serial);
     totalsByCenter[c] = {
       have: rows.length,
-      inUse: rows.filter(s => s.inUse).length,
-      unused: rows.filter(s => !s.inUse).length,
+      inUse: rows.filter(s => s.status === '사용').length,
+      unused: rows.filter(s => s.status === '미사용').length,
+      discarded: rows.filter(s => s.status === '폐기').length,
     };
   });
 
+  const statusRank = { '사용': 0, '미사용': 1, '폐기': 2 };
   listEl.innerHTML = `<div class="pm3-columns">${centers.map(c => {
     const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c)
-      .sort((a,b) => (!!b[1].serial - !!a[1].serial) || (b[1].inUse - a[1].inUse) || a[1].user.localeCompare(b[1].user, 'ko'));
+      .sort((a,b) => (!!b[1].serial - !!a[1].serial) || (statusRank[a[1].status] - statusRank[b[1].status]) || a[1].user.localeCompare(b[1].user, 'ko'));
     const t = totalsByCenter[c];
     return `
     <div class="pm3-col">
       <div class="pm3-col-title">${escapeHtml(c)}</div>
-      <div class="pm3-col-total">보유 ${t.have} · 사용 ${t.inUse} · 미사용 ${t.unused}</div>
+      <div class="pm3-col-total">보유 ${t.have} · 사용 ${t.inUse} · 미사용 ${t.unused}${t.discarded ? ' · 폐기 ' + t.discarded : ''}</div>
       ${rows.map(([sid, s]) => `
         <div class="pm3-col-row" ${state.editUnlocked ? `data-scan-edit="${sid}"` : ''}>
           <div class="pm3-zone">${escapeHtml(s.user)}</div>
-          <div class="pm3-nums">${s.serial ? (s.inUse ? '사용' : '미사용') + (last4(s.serial) ? ' · ' + escapeHtml(last4(s.serial)) : '') : '미보유'}</div>
+          <div class="pm3-nums">${s.serial ? s.status + (last4(s.serial) ? ' · ' + escapeHtml(last4(s.serial)) : '') : '미보유'}</div>
         </div>
       `).join('')}
     </div>`;
@@ -665,7 +668,7 @@ function renderScannerList() {
 
 function openScannerEdit(sid) {
   const isNew = !sid;
-  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', user: '', inUse: true, serial: '', model: '', note: '' } : scanners[sid];
+  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', user: '', status: '사용', serial: '', model: '', note: '' } : scanners[sid];
   sheetPanel.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-top"><div class="sheet-title">${isNew ? 'PM3 보유자 추가' : 'PM3 보유 정보 수정'}</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
@@ -678,9 +681,10 @@ function openScannerEdit(sid) {
     </div>
     <div class="form-field">
       <label class="form-label">사용여부</label>
-      <select class="form-select" id="scanInUseInput">
-        <option value="1" ${rec.inUse ? 'selected' : ''}>사용</option>
-        <option value="0" ${!rec.inUse ? 'selected' : ''}>미사용</option>
+      <select class="form-select" id="scanStatusInput">
+        <option value="사용" ${rec.status === '사용' ? 'selected' : ''}>사용</option>
+        <option value="미사용" ${rec.status === '미사용' ? 'selected' : ''}>미사용</option>
+        <option value="폐기" ${rec.status === '폐기' ? 'selected' : ''}>폐기</option>
       </select>
     </div>
     <div class="form-row2">
@@ -710,20 +714,20 @@ function openScannerEdit(sid) {
     const center = document.getElementById('scanCenterInput').value.trim();
     const user = document.getElementById('scanUserInput').value.trim();
     if (!center || !user) { await customAlert('센터와 사용자를 입력해주세요.'); return; }
-    const inUse = document.getElementById('scanInUseInput').value === '1';
+    const status = document.getElementById('scanStatusInput').value;
     const model = document.getElementById('scanModelInput').value.trim();
     const serial = document.getElementById('scanSerialInput').value.trim();
     const note = document.getElementById('scanNoteInput').value.trim();
     const id = isNew ? 'sc' + (nextScannerId++) : sid;
     const prevVal = scanners[id];
-    scanners[id] = { center, user, inUse, model, serial, note, updatedAt: new Date().toISOString() };
+    scanners[id] = { center, user, status, model, serial, note, updatedAt: new Date().toISOString() };
     const ok = await safeSet('scanners', scanners);
     if (!ok) {
       if (prevVal) scanners[id] = prevVal; else delete scanners[id];
       await customAlert('저장소 오류로 저장에 실패했습니다. 다시 시도해주세요.');
       return;
     }
-    pushLog(`${isNew ? 'PM3 등록' : 'PM3 정보 수정'}: ${center} ${user} — ${inUse ? '사용' : '미사용'}`);
+    pushLog(`${isNew ? 'PM3 등록' : 'PM3 정보 수정'}: ${center} ${user} — ${status}`);
     showToast('저장되었습니다');
     closeDetailScanner();
   };
@@ -1365,11 +1369,12 @@ document.getElementById('excelUploadInput').addEventListener('change', async (e)
 const GSHEET_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '분류':'category', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
 const GSHEET_TABS = { biz: '비품전체내역_웹용백데이터_삭제금지', machine: '기계전체내역_웹용백데이터_삭제금지', pm3: 'PM3현황_웹용백데이터_삭제금지' };
 const PM3_FIELD_MAP = { '센터':'center', '사용자':'user', '사용여부':'inUseRaw', '시리얼번호':'serial', '특이사항':'note', '모델명':'model' };
-function parsePm3InUse(val) {
+function parsePm3Status(val) {
   const s = String(val || '').trim();
-  if (s.includes('미사용')) return false;
-  if (s.includes('사용')) return true;
-  return false;
+  if (s.includes('폐기')) return '폐기';
+  if (s.includes('미사용')) return '미사용';
+  if (s.includes('사용')) return '사용';
+  return '미사용';
 }
 const PM3_INVALID_USER_VALUES = ['미사용', '사용', '없음', '미배정', '공석', '-', 'x', 'X'];
 function isValidPm3User(name) {
@@ -1538,14 +1543,14 @@ async function syncGoogleSheet(silent) {
         const validUser = isValidPm3User(user);
         if (!center) { pm3Skip.noCenter++; return; }
         if (!validUser && !serial) { pm3Skip.invalidUser++; return; } // truly empty row — skip
-        const inUse = parsePm3InUse(rec.inUseRaw);
+        const status = parsePm3Status(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
         let id = gsheetSyncMap.pm3[externalKey];
         if (id === undefined) { id = 'sc' + (nextScannerId++); gsheetSyncMap.pm3[externalKey] = id; scanAdded++; }
         else { scanUpdated++; }
         scanners[id] = {
-          center, user: validUser ? user : '(미배정)', inUse, serial,
+          center, user: validUser ? user : '(미배정)', status, serial,
           model: String(rec.model || '').trim(),
           note: String(rec.note || '').trim(),
           updatedAt: new Date().toISOString(),
