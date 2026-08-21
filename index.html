@@ -668,13 +668,13 @@ function renderScannerList() {
 
 function openScannerEdit(sid) {
   const isNew = !sid;
-  const rec = isNew ? { center: getSortedCenters(getEffectiveData())[0] || '1센터', user: '', status: '사용', serial: '', model: '', note: '' } : scanners[sid];
+  const rec = isNew ? { center: getAllKnownCenters()[0] || '1센터', user: '', status: '사용', serial: '', model: '', note: '' } : scanners[sid];
   sheetPanel.innerHTML = `
     <div class="sheet-handle"></div>
     <div class="sheet-top"><div class="sheet-title">${isNew ? 'PM3 보유자 추가' : 'PM3 보유 정보 수정'}</div><button class="sheet-close" id="sheetCloseBtn">✕</button></div>
     <div class="form-row2">
       <div class="form-field"><label class="form-label">센터</label>
-        <select class="form-select" id="scanCenterInput">${getSortedCenters(getEffectiveData()).map(c => `<option value="${escapeAttr(c)}" ${c===rec.center?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
+        <select class="form-select" id="scanCenterInput">${getAllKnownCenters().map(c => `<option value="${escapeAttr(c)}" ${c===rec.center?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
       </div>
       <div class="form-field"><label class="form-label">사용자</label><input class="form-input" id="scanUserInput" value="${escapeAttr(rec.user)}"></div>
     </div>
@@ -851,6 +851,13 @@ function centerRank(c) {
 }
 function getSortedCenters(data) {
   const set = new Set(data.map(d => d.center).filter(Boolean));
+  return [...set].sort((a,b) => centerRank(a) - centerRank(b) || a.localeCompare(b, 'ko'));
+}
+function getAllKnownCenters() {
+  const set = new Set([
+    ...getEffectiveData().map(d => d.center),
+    ...Object.values(scanners).map(s => s.center),
+  ].filter(Boolean));
   return [...set].sort((a,b) => centerRank(a) - centerRank(b) || a.localeCompare(b, 'ko'));
 }
 function buildCenterTabs(containerEl, data, sub, onPick) {
