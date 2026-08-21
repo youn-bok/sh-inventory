@@ -34,7 +34,8 @@
   body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh; padding-bottom: 60px; }
   header { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 16px 16px 0; border-bottom: 1px solid var(--line); }
   .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; font-weight: 800; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+  .brand-logo-text { height: 15px; width: auto; display: block; }
   .lock-btn { display: flex; align-items: center; gap: 5px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: var(--ink-dim); cursor: pointer; }
   .lock-btn.unlocked { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
   .lock-btn svg { width: 13px; height: 13px; }
@@ -245,7 +246,7 @@
 
 <header>
   <div class="top-row">
-    <h1>(주)에스에이치 비품관리</h1>
+    <h1><img src="data:image/png;base64,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" alt="에스에이치" class="brand-logo-text"> 비품관리</h1>
     <button class="lock-btn" id="lockBtn"></button>
   </div>
   <div class="view-tabs" id="viewTabs">
@@ -859,11 +860,10 @@ function buildCenterTabs(containerEl, data, sub, onPick) {
     containerEl.appendChild(btn);
   });
 }
-const MACHINE_SOURCE = '기계목록';
 
 function matchesFilter(d, sub, scope) {
-  if (scope === 'nonMachine' && d.source === MACHINE_SOURCE) return false;
-  if (scope === 'machine' && d.source !== MACHINE_SOURCE) return false;
+  if (scope === 'nonMachine' && d.source === GSHEET_TABS.machine) return false;
+  if (scope === 'machine' && d.source !== GSHEET_TABS.machine) return false;
   if (sub.center !== '전체' && d.center !== sub.center) return false;
   if (sub.status && sub.status !== 'all' && d.status !== sub.status) return false;
   if (sub.query) {
@@ -900,7 +900,7 @@ function renderList() {
   searchInput.value = sub.query;
   clearBtn.style.display = sub.query ? 'block' : 'none';
   const allData = getEffectiveData();
-  buildCenterTabs(centerTabsEl, allData.filter(d => d.source !== MACHINE_SOURCE), sub, renderList);
+  buildCenterTabs(centerTabsEl, allData.filter(d => d.source !== GSHEET_TABS.machine), sub, renderList);
   document.querySelectorAll('#statusFilters .status-chip').forEach(el => el.classList.toggle('active', el.dataset.s === sub.status));
 
   const filtered = allData.filter(d => matchesFilter(d, sub, 'nonMachine'));
@@ -941,7 +941,7 @@ function renderMachine() {
   machineSearchInput.value = sub.query;
   machineClearBtn.style.display = sub.query ? 'block' : 'none';
   const allData = getEffectiveData();
-  const machineData = allData.filter(d => d.source === MACHINE_SOURCE);
+  const machineData = allData.filter(d => d.source === GSHEET_TABS.machine);
   buildCenterTabs(machineCenterTabsEl, machineData, sub, renderMachine);
   document.querySelectorAll('#machineStatusFilters .status-chip').forEach(el => el.classList.toggle('active', el.dataset.s === sub.status));
 
@@ -1524,6 +1524,7 @@ async function syncGoogleSheet(silent) {
     // --- PM3현황 → 사용자별 보유 현황 (사용자가 실명 또는 '공용'인 행만 유효) ---
     const pm3Rows = await fetchTabCsv(sheetId, GSHEET_TABS.pm3);
     const seenPm3Keys = new Set();
+    const pm3Skip = { noCenter: 0, invalidUser: 0, noSerial: 0 };
     if (pm3Rows === null) {
       missingTabs.push(GSHEET_TABS.pm3);
     } else {
@@ -1533,7 +1534,9 @@ async function syncGoogleSheet(silent) {
         const center = String(rec.center || '').trim();
         const user = String(rec.user || '').trim();
         const serial = String(rec.serial || '').trim();
-        if (!center || !isValidPm3User(user) || !serial) return;
+        if (!center) { pm3Skip.noCenter++; return; }
+        if (!isValidPm3User(user)) { pm3Skip.invalidUser++; return; }
+        if (!serial) { pm3Skip.noSerial++; return; }
         const inUse = parsePm3InUse(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
@@ -1566,7 +1569,9 @@ async function syncGoogleSheet(silent) {
       throw new Error('탭을 하나도 읽지 못했습니다. 시트가 "링크가 있는 모든 사용자" 보기 권한으로 공유되어 있는지 확인해주세요.');
     }
     const bizC = perTabCounts.biz, machC = perTabCounts.machine;
-    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 추가${scanAdded}·수정${scanUpdated}·삭제${scanRemoved}`;
+    const pm3TotalRows = pm3Rows ? pm3Rows.length : 0;
+    const pm3Valid = Object.keys(gsheetSyncMap.pm3).length;
+    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 원본${pm3TotalRows}행→유효${pm3Valid}건(제외: 센터없음${pm3Skip.noCenter}·사용자무효${pm3Skip.invalidUser}·시리얼없음${pm3Skip.noSerial})`;
     pushLog(`구글시트 전체 동기화: ${summary}`);
     const headerMismatch = machC.actualHeaders || bizC.actualHeaders;
     if (missingTabs.length) {
@@ -1575,7 +1580,7 @@ async function syncGoogleSheet(silent) {
       const which = machC.actualHeaders ? '기계' : '비품';
       await customAlert(`동기화 결과: ${summary}\n\n${which} 탭은 읽었지만 반영된 행이 0건입니다. 실제 헤더가 코드가 기대하는 이름과 다를 수 있어요.\n\n시트의 실제 헤더: ${(machC.actualHeaders||bizC.actualHeaders).join(', ')}`);
     } else if (!silent) {
-      showToast('동기화 완료 — ' + summary);
+      await customAlert('동기화 완료\n\n' + summary);
     } else {
       showToast('구글시트에서 자동 동기화되었습니다 — ' + summary);
     }
