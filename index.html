@@ -7,7 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#22221F">
+<meta name="theme-color" content="#F5F4F0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -624,7 +624,7 @@ function renderScannerList() {
   const grandHave = entries.length;
   const grandInUse = entries.filter(s => s.inUse).length;
   const grandUnused = grandHave - grandInUse;
-  if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave}·사용 ${grandInUse}·미사용 ${grandUnused})`;
+  if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave} · 사용 ${grandInUse} · 미사용 ${grandUnused})`;
 
   const centers = getSortedCenters(entries).sort((a,b) => pm3CenterRank(a) - pm3CenterRank(b));
   const totalsByCenter = {};
@@ -1515,6 +1515,9 @@ async function syncGoogleSheet(silent) {
         });
       }
       perTabCounts[tabKey] = { added, updated, removed, found: rows !== null, rowCount: rows ? rows.length : 0 };
+      if (rows !== null && rows.length > 0 && added === 0 && updated === 0) {
+        perTabCounts[tabKey].actualHeaders = Object.keys(rows[0]);
+      }
       itemAdded += added; itemUpdated += updated; itemRemoved += removed;
     }
 
@@ -1529,7 +1532,8 @@ async function syncGoogleSheet(silent) {
         Object.keys(PM3_FIELD_MAP).forEach(kr => { rec[PM3_FIELD_MAP[kr]] = row[kr]; });
         const center = String(rec.center || '').trim();
         const user = String(rec.user || '').trim();
-        if (!center || !isValidPm3User(user)) return;
+        const serial = String(rec.serial || '').trim();
+        if (!center || !isValidPm3User(user) || !serial) return;
         const inUse = parsePm3InUse(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
@@ -1537,8 +1541,7 @@ async function syncGoogleSheet(silent) {
         if (id === undefined) { id = 'sc' + (nextScannerId++); gsheetSyncMap.pm3[externalKey] = id; scanAdded++; }
         else { scanUpdated++; }
         scanners[id] = {
-          center, user, inUse,
-          serial: String(rec.serial || '').trim(),
+          center, user, inUse, serial,
           model: String(rec.model || '').trim(),
           note: String(rec.note || '').trim(),
           updatedAt: new Date().toISOString(),
@@ -1565,8 +1568,12 @@ async function syncGoogleSheet(silent) {
     const bizC = perTabCounts.biz, machC = perTabCounts.machine;
     const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 추가${scanAdded}·수정${scanUpdated}·삭제${scanRemoved}`;
     pushLog(`구글시트 전체 동기화: ${summary}`);
+    const headerMismatch = machC.actualHeaders || bizC.actualHeaders;
     if (missingTabs.length) {
-      await customAlert(`동기화 결과: ${summary}\n\n못 읽은 탭이 있습니다: ${missingTabs.join(', ')}\n탭 이름이 정확한지 확인해주세요.`);
+      if (!silent) await customAlert(`동기화 결과: ${summary}\n\n못 읽은 탭이 있습니다: ${missingTabs.join(', ')}\n탭 이름이 정확한지 확인해주세요.`);
+    } else if (headerMismatch && !silent) {
+      const which = machC.actualHeaders ? '기계' : '비품';
+      await customAlert(`동기화 결과: ${summary}\n\n${which} 탭은 읽었지만 반영된 행이 0건입니다. 실제 헤더가 코드가 기대하는 이름과 다를 수 있어요.\n\n시트의 실제 헤더: ${(machC.actualHeaders||bizC.actualHeaders).join(', ')}`);
     } else if (!silent) {
       showToast('동기화 완료 — ' + summary);
     } else {
