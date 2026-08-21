@@ -622,15 +622,16 @@ function renderScannerList() {
     listEl.innerHTML = '<div class="empty-activity">등록된 데이터가 없습니다.</div>';
     return;
   }
-  const grandHave = entries.length;
-  const grandInUse = entries.filter(s => s.inUse).length;
+  const withSerial = entries.filter(s => s.serial);
+  const grandHave = withSerial.length;
+  const grandInUse = withSerial.filter(s => s.inUse).length;
   const grandUnused = grandHave - grandInUse;
   if (titleEl) titleEl.textContent = `PM3 보유 현황 (보유 ${grandHave} · 사용 ${grandInUse} · 미사용 ${grandUnused})`;
 
   const centers = getSortedCenters(entries).sort((a,b) => pm3CenterRank(a) - pm3CenterRank(b));
   const totalsByCenter = {};
   centers.forEach(c => {
-    const rows = entries.filter(s => s.center === c);
+    const rows = entries.filter(s => s.center === c && s.serial);
     totalsByCenter[c] = {
       have: rows.length,
       inUse: rows.filter(s => s.inUse).length,
@@ -640,7 +641,7 @@ function renderScannerList() {
 
   listEl.innerHTML = `<div class="pm3-columns">${centers.map(c => {
     const rows = Object.entries(scanners).filter(([sid, s]) => s.center === c)
-      .sort((a,b) => (b[1].inUse - a[1].inUse) || a[1].user.localeCompare(b[1].user, 'ko'));
+      .sort((a,b) => (!!b[1].serial - !!a[1].serial) || (b[1].inUse - a[1].inUse) || a[1].user.localeCompare(b[1].user, 'ko'));
     const t = totalsByCenter[c];
     return `
     <div class="pm3-col">
@@ -649,7 +650,7 @@ function renderScannerList() {
       ${rows.map(([sid, s]) => `
         <div class="pm3-col-row" ${state.editUnlocked ? `data-scan-edit="${sid}"` : ''}>
           <div class="pm3-zone">${escapeHtml(s.user)}</div>
-          <div class="pm3-nums">${s.inUse ? '사용' : '미사용'}${last4(s.serial) ? ' · ' + escapeHtml(last4(s.serial)) : ''}</div>
+          <div class="pm3-nums">${s.serial ? (s.inUse ? '사용' : '미사용') + (last4(s.serial) ? ' · ' + escapeHtml(last4(s.serial)) : '') : '미보유'}</div>
         </div>
       `).join('')}
     </div>`;
@@ -1524,7 +1525,7 @@ async function syncGoogleSheet(silent) {
     // --- PM3현황 → 사용자별 보유 현황 (사용자가 실명 또는 '공용'인 행만 유효) ---
     const pm3Rows = await fetchTabCsv(sheetId, GSHEET_TABS.pm3);
     const seenPm3Keys = new Set();
-    const pm3Skip = { noCenter: 0, invalidUser: 0, noSerial: 0 };
+    const pm3Skip = { noCenter: 0, invalidUser: 0 };
     if (pm3Rows === null) {
       missingTabs.push(GSHEET_TABS.pm3);
     } else {
@@ -1534,9 +1535,9 @@ async function syncGoogleSheet(silent) {
         const center = String(rec.center || '').trim();
         const user = String(rec.user || '').trim();
         const serial = String(rec.serial || '').trim();
+        const validUser = isValidPm3User(user);
         if (!center) { pm3Skip.noCenter++; return; }
-        if (!isValidPm3User(user)) { pm3Skip.invalidUser++; return; }
-        if (!serial) { pm3Skip.noSerial++; return; }
+        if (!validUser && !serial) { pm3Skip.invalidUser++; return; } // truly empty row — skip
         const inUse = parsePm3InUse(rec.inUseRaw);
         const externalKey = 'g_pm3_' + i;
         seenPm3Keys.add(externalKey);
@@ -1544,7 +1545,7 @@ async function syncGoogleSheet(silent) {
         if (id === undefined) { id = 'sc' + (nextScannerId++); gsheetSyncMap.pm3[externalKey] = id; scanAdded++; }
         else { scanUpdated++; }
         scanners[id] = {
-          center, user, inUse, serial,
+          center, user: validUser ? user : '(미배정)', inUse, serial,
           model: String(rec.model || '').trim(),
           note: String(rec.note || '').trim(),
           updatedAt: new Date().toISOString(),
@@ -1571,7 +1572,7 @@ async function syncGoogleSheet(silent) {
     const bizC = perTabCounts.biz, machC = perTabCounts.machine;
     const pm3TotalRows = pm3Rows ? pm3Rows.length : 0;
     const pm3Valid = Object.keys(gsheetSyncMap.pm3).length;
-    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 원본${pm3TotalRows}행→유효${pm3Valid}건(제외: 센터없음${pm3Skip.noCenter}·사용자무효${pm3Skip.invalidUser}·시리얼없음${pm3Skip.noSerial})`;
+    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 원본${pm3TotalRows}행→유효${pm3Valid}건(제외: 센터없음${pm3Skip.noCenter}·빈행${pm3Skip.invalidUser})`;
     pushLog(`구글시트 전체 동기화: ${summary}`);
     const headerMismatch = machC.actualHeaders || bizC.actualHeaders;
     if (missingTabs.length) {
