@@ -34,8 +34,8 @@
   body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh; padding-bottom: 60px; }
   header { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 16px 16px 0; border-bottom: 1px solid var(--line); }
   .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; font-weight: 800; display: flex; align-items: flex-end; gap: 6px; }
-  .brand-logo-text { height: 30px; width: auto; display: block; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; font-weight: 800; }
+  .brand-logo-text { height: 30px; width: auto; vertical-align: baseline; margin-right: 6px; }
   .lock-btn { display: flex; align-items: center; gap: 5px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 11px; font-size: 12px; font-weight: 700; color: var(--ink-dim); cursor: pointer; }
   .lock-btn.unlocked { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
   .lock-btn svg { width: 13px; height: 13px; }
@@ -1454,6 +1454,14 @@ function gvizCsvUrl(sheetId, tabName) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 }
 
+function normText(v) {
+  // Korean text can arrive with different Unicode compositions (NFC vs NFD)
+  // depending on input method/OS, which makes visually-identical strings like
+  // "관리부" fail strict === comparisons. Normalize + trim everything read from
+  // the sheet so grouping/matching by center, user, zone etc. is reliable.
+  return String(v || '').normalize('NFC').trim();
+}
+
 async function fetchTabCsv(sheetId, tabName) {
   const res = await fetch(gvizCsvUrl(sheetId, tabName), { cache: 'no-store' });
   if (!res.ok) throw new Error(tabName + ': HTTP ' + res.status);
@@ -1493,7 +1501,7 @@ async function syncGoogleSheet(silent) {
       } else {
         rows.forEach((row, i) => {
           const rec = { source: sheetName, updatedAt: new Date().toISOString() };
-          Object.keys(fieldMap).forEach(kr => { rec[fieldMap[kr]] = String(row[kr] || '').trim(); });
+          Object.keys(fieldMap).forEach(kr => { rec[fieldMap[kr]] = normText(row[kr]); });
           if (!rec.center || !rec.item) return;
           rec.zone = rec.zone || '위치 미상';
           rec.status = STATUS_ORDER.includes(rec.status) ? rec.status : '정상';
@@ -1536,9 +1544,9 @@ async function syncGoogleSheet(silent) {
       pm3Rows.forEach((row, i) => {
         const rec = {};
         Object.keys(PM3_FIELD_MAP).forEach(kr => { rec[PM3_FIELD_MAP[kr]] = row[kr]; });
-        const center = String(rec.center || '').trim();
-        const user = String(rec.user || '').trim();
-        const serial = String(rec.serial || '').trim();
+        const center = normText(rec.center);
+        const user = normText(rec.user);
+        const serial = normText(rec.serial);
         const validUser = isValidPm3User(user);
         if (!center) { pm3Skip.noCenter++; return; }
         if (!validUser && !serial) { pm3Skip.invalidUser++; return; } // truly empty row — skip
@@ -1550,8 +1558,8 @@ async function syncGoogleSheet(silent) {
         else { scanUpdated++; }
         scanners[id] = {
           center, user: validUser ? user : '(미배정)', status, serial,
-          model: String(rec.model || '').trim(),
-          note: String(rec.note || '').trim(),
+          model: normText(rec.model),
+          note: normText(rec.note),
           updatedAt: new Date().toISOString(),
         };
       });
