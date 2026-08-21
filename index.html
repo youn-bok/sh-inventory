@@ -1195,6 +1195,8 @@ function renderViewSheet(d, inAuditContext) {
   });
 }
 
+const ADMIN_PHONE = '01065896826';
+
 function renderRequestSheet(d, inAuditContext) {
   sheetPanel.innerHTML = `
     <div class="sheet-handle"></div>
@@ -1208,9 +1210,10 @@ function renderRequestSheet(d, inAuditContext) {
       <label class="form-label">내용 (선택)</label>
       <textarea class="form-textarea" id="reqNoteInput" placeholder="예: 작동이 안 됨, 파손 부위 확인 필요 등"></textarea>
     </div>
+    <div class="gsheet-hint" style="margin-bottom:14px;">보내기를 누르면 문자 앱이 열려요. 내용이 채워진 채로 뜨니, <b>보내기만 눌러주시면</b> 관리자에게 전달됩니다.</div>
     <div class="sheet-actions">
       <button class="sheet-btn secondary" id="reqCancelBtn">취소</button>
-      <button class="sheet-btn primary" id="reqSaveBtn">요청 보내기</button>
+      <button class="sheet-btn primary" id="reqSaveBtn">문자로 요청 보내기</button>
     </div>
   `;
   document.getElementById('sheetCloseBtn').onclick = closeDetail;
@@ -1222,7 +1225,12 @@ function renderRequestSheet(d, inAuditContext) {
     requests[rid] = { itemId: d.id, type, note, requestedAt: new Date().toISOString(), status: 'pending' };
     safeSet('requests', requests);
     pushLog(`${type}: ${d.item} (${d.zone})${note ? ' — ' + note : ''}`);
-    showToast('요청이 접수되었습니다');
+
+    const msg = `[비품 요청] ${type}\n품목: ${d.item}\n위치: ${d.center} ${d.zone}${note ? '\n내용: ' + note : ''}`;
+    const smsUrl = `sms:${ADMIN_PHONE}?body=${encodeURIComponent(msg)}`;
+    window.location.href = smsUrl;
+
+    showToast('문자 앱을 여는 중입니다');
     renderViewSheet(d, inAuditContext);
   };
 }
