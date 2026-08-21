@@ -426,7 +426,14 @@ function pushLog(text) {
 /* ===================== Data merge ===================== */
 function getEffectiveData() {
   const map = {};
-  BASE_DATA.forEach(d => { map[d.id] = { ...d }; });
+  // On external hosting (no persistent storage), every page load does a full
+  // re-sync from the Google Sheet, which is now the real source of truth.
+  // The 325 items baked into this file at build time would otherwise sit
+  // alongside the freshly-synced sheet data forever and double-count anything
+  // that exists in both, so skip the static snapshot entirely in that mode.
+  if (HAS_STORAGE) {
+    BASE_DATA.forEach(d => { map[d.id] = { ...d }; });
+  }
   Object.keys(overrides).forEach(idStr => {
     const id = parseInt(idStr);
     map[id] = { ...(map[id] || {}), ...overrides[idStr], id };
