@@ -801,10 +801,10 @@ function renderZoneGroups(containerEl, filtered, collapsedSet, showCenterBadge, 
       const audit = getAudit(d.id);
       const pendingReq = getPendingRequests(d.id);
       const isMachine = d.source === GSHEET_TABS.machine;
-      // Machines: subcategory (e.g. "지게차") is the searchable/browsable title;
+      // Machines: 분류(category, e.g. "지게차") is the searchable/browsable title;
       // the specific spec text (e.g. "CAT 1.8톤 입식") + model go on the line below.
-      const titleText = (isMachine && d.subcategory) ? d.subcategory : d.item;
-      const subLine = (isMachine && d.subcategory)
+      const titleText = (isMachine && d.category) ? d.category : d.item;
+      const subLine = (isMachine && d.category)
         ? [d.item, d.model].filter(Boolean).join(' · ')
         : d.model;
       const row = document.createElement('div');
@@ -1403,7 +1403,7 @@ function pm3CenterRank(c) {
   return 1000;
 }
 
-const MACHINE_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
+const MACHINE_FIELD_MAP = { '센터':'center', '구역/보관장소':'zone', '분류':'category', '소분류':'subcategory', '품목':'item', '모델명':'model', '상태':'status', '수량':'qty', '비고':'note' };
 
 function renderGsheetCard() {
   const card = document.getElementById('gsheetCard');
@@ -1417,7 +1417,7 @@ function renderGsheetCard() {
       </div>
       <div class="gsheet-hint">구글시트 안에 <b>비품전체내역_웹용백데이터_삭제금지 / 기계전체내역_웹용백데이터_삭제금지 / PM3현황_웹용백데이터_삭제금지</b> 탭 3개가 있어야 해요.<br><br>
       "웹에 게시"는 <b>필요 없고</b>, 대신 오른쪽 상단 [공유] 버튼에서 <b>"링크가 있는 모든 사용자"를 "뷰어"로</b> 설정한 다음, 브라우저 주소창에 있는 구글시트 링크(예: docs.google.com/spreadsheets/d/…)를 그대로 붙여넣어 주세요.<br><br>
-      비품·기계 탭 헤더: 센터 / 구역/보관장소 / 분류 / 소분류 / 품목 / 모델명 / 상태 / 수량 / 비고 (기계 탭은 연락처 / 월렌탈료 / 운용 시작 / 렌탈 종료 / 종료 조건도 인식됩니다)<br>
+      비품·기계 탭 헤더: 센터 / 구역/보관장소 / 분류 / 소분류 / 품목 / 모델명 / 상태 / 수량 / 비고<br>
       PM3현황 탭 헤더: 센터 / 사용자 / 사용여부 / 시리얼번호 / 특이사항 / 모델명<br><br>
       ⚠️ 동기화하면 <b>시트에 있는 내용으로 전체 데이터가 교체</b>됩니다 — 시트에 없는 기존 품목·인원은 삭제 처리돼요. 시트에 현재 전체 목록을 다 채워두고 동기화하세요.</div>
     `;
@@ -1520,7 +1520,6 @@ async function syncGoogleSheet(silent) {
           rec.zone = rec.zone || '위치 미상';
           rec.status = STATUS_ORDER.includes(rec.status) ? rec.status : '정상';
           rec.qty = parseInt(rec.qty) || 1;
-          if (tabKey === 'machine' && !rec.category) rec.category = rec.subcategory;
 
           const externalKey = 'g_' + tabKey + '_' + i;
           seenKeys.add(externalKey);
