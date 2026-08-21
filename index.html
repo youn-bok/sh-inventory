@@ -1584,7 +1584,10 @@ async function syncGoogleSheet(silent) {
     const bizC = perTabCounts.biz, machC = perTabCounts.machine;
     const pm3TotalRows = pm3Rows ? pm3Rows.length : 0;
     const pm3Valid = Object.keys(gsheetSyncMap.pm3).length;
-    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 원본${pm3TotalRows}행→유효${pm3Valid}건(제외: 센터없음${pm3Skip.noCenter}·빈행${pm3Skip.invalidUser})`;
+    const pm3ByCenter = {};
+    Object.values(scanners).forEach(s => { pm3ByCenter[s.center] = (pm3ByCenter[s.center] || 0) + 1; });
+    const pm3CenterBreakdown = Object.keys(pm3ByCenter).map(c => `${c}=${pm3ByCenter[c]}`).join(', ');
+    const summary = `비품 ${bizC.found ? `${bizC.rowCount}행(추가${bizC.added}·수정${bizC.updated}·삭제${bizC.removed})` : '못읽음'} · 기계 ${machC.found ? `${machC.rowCount}행(추가${machC.added}·수정${machC.updated}·삭제${machC.removed})` : '못읽음'} · PM3 원본${pm3TotalRows}행→유효${pm3Valid}건(제외: 센터없음${pm3Skip.noCenter}·빈행${pm3Skip.invalidUser}) · PM3 센터별[${pm3CenterBreakdown}]`;
     pushLog(`구글시트 전체 동기화: ${summary}`);
     const headerMismatch = machC.actualHeaders || bizC.actualHeaders;
     if (missingTabs.length) {
