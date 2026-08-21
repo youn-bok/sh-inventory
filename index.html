@@ -292,6 +292,17 @@
 </div>
 
 <div id="auditView" style="display:none;">
+  <div id="auditLockGate" style="display:none;">
+    <div class="dash" style="text-align:center; padding-top:50px;">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--ink-dim)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;">관리자 전용 화면입니다</div>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin-bottom:20px;line-height:1.6;">엑셀·구글시트 동기화, 실사, 품목 수정은<br>관리자 PIN이 있어야 이용할 수 있어요.</div>
+      <button class="gsheet-btn" id="auditUnlockBtn" style="padding:11px 22px;">PIN 입력하고 계속하기</button>
+    </div>
+  </div>
+  <div id="auditContentWrap">
   <div class="dash" style="padding-bottom:0;">
     <div class="section-title" style="margin-top:0;">엑셀</div>
     <div class="excel-mini-row">
@@ -323,6 +334,7 @@
   </div>
   <div class="summary-bar" id="auditSummaryBar"></div>
   <main id="auditMainContent"></main>
+  </div>
 </div>
 
 <div class="sheet-overlay" id="sheetOverlay">
@@ -438,10 +450,15 @@ async function sha256(text) {
 }
 async function handleLockClick() {
   if (state.editUnlocked) {
-    state.editUnlocked = false; renderLockBtn(); showToast('편집 잠금이 설정되었습니다'); return;
+    state.editUnlocked = false; renderLockBtn(); showToast('편집 잠금이 설정되었습니다');
+    if (state.view === 'audit') renderAudit();
+    return;
   }
   const ok = await requestUnlock();
-  if (ok) showToast('편집 잠금이 해제되었습니다');
+  if (ok) {
+    showToast('편집 잠금이 해제되었습니다');
+    if (state.view === 'audit') renderAudit();
+  }
 }
 function requestUnlock() {
   return new Promise(async (resolve) => {
@@ -998,6 +1015,21 @@ auditClearBtn.onclick = () => { auditSearchInput.value = ''; state.audit.query =
 onlyUnauditedBtn.onclick = () => { state.audit.onlyUnaudited = !state.audit.onlyUnaudited; renderAudit(); };
 
 function renderAudit() {
+  const lockGate = document.getElementById('auditLockGate');
+  const contentWrap = document.getElementById('auditContentWrap');
+  if (!state.editUnlocked) {
+    lockGate.style.display = '';
+    contentWrap.style.display = 'none';
+    const unlockBtn = document.getElementById('auditUnlockBtn');
+    if (unlockBtn) unlockBtn.onclick = async () => {
+      const ok = await requestUnlock();
+      if (ok) renderAudit();
+    };
+    return;
+  }
+  lockGate.style.display = 'none';
+  contentWrap.style.display = '';
+
   renderGsheetCard();
   const sub = state.audit;
   auditSearchInput.value = sub.query;
